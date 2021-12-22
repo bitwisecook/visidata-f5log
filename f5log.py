@@ -9,7 +9,7 @@ from visidata import Path, VisiData, Sheet, date, ColumnAttr, vd
 hexint = partial(int, base=16)
 delta_t = partial(int, base=10)
 re_f5log = re.compile(
-    r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>[a-z0-9_.]+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
+    r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>[a-z0-9_./]+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
 )
 re_ltm_irule = re.compile(
     r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<src_ip>\S+)\s->\s(?P<dst_ip>\S+)|.*)"
@@ -51,7 +51,7 @@ class F5LogSheet(Sheet):
             host: str = None,
             level: str = None,
             process: str = None,
-            pid: int = None,
+            proc_pid: int = None,
             logid1: hexint = None,
             logid2: hexint = None,
             message: str = None,
@@ -64,7 +64,7 @@ class F5LogSheet(Sheet):
                 "host": host,
                 "level": level,
                 "process": process,
-                "pid": pid,
+                "proc_pid": proc_pid,
                 "logid1": logid1,
                 "logid2": logid2,
                 "message": message,
@@ -83,10 +83,11 @@ class F5LogSheet(Sheet):
         ColumnAttr("host", type=str),
         ColumnAttr("level", type=str),
         ColumnAttr("process", type=str),
-        ColumnAttr("pid", type=int),
-        ColumnAttr("logid1", type=hexint),  # hexint
-        ColumnAttr("logid2", type=hexint),  # hexint
+        ColumnAttr("proc_pid", type=int),
+        ColumnAttr("logid1", type=hexint),
+        ColumnAttr("logid2", type=hexint),
         ColumnAttr("message", type=str),
+        ColumnAttr("object", type=str),
     ]
 
     @staticmethod
@@ -211,7 +212,7 @@ class F5LogSheet(Sheet):
         y = {
             "irule_msg": m.get("irule_msg"),
             "object": m.get("irule"),
-            "event": m.get("event"),
+            "irule_event": m.get("event"),
             "message": m.get("message"),
         }
         if m.get("message", "").startswith("aborted for"):
@@ -462,10 +463,11 @@ class F5LogSheet(Sheet):
         "host",
         "level",
         "process",
-        "pid",
+        "proc_pid",
         "logid1",
         "logid2",
         "message",
+        "object",
     }
 
     def iterload(self):
@@ -486,7 +488,9 @@ class F5LogSheet(Sheet):
                     rawmsg=line, kv={"PARSE_ERROR": "unable to parse line"}
                 )
                 continue
-            kv = {"message": m.get("message")}
+            kv = {
+                "message": m.get("message"),
+            }
             if m.get("date1"):
                 timestamp = datetime.strptime(
                     f"{self._year} {m.get('date1').replace('  ', ' ')}",
@@ -496,9 +500,10 @@ class F5LogSheet(Sheet):
                 timestamp = datetime.strptime(
                     m.get("date2").replace("+", "-"), "%Y-%m-%dT%H:%M:%S-%z"
                 )
+            else:
+                timestamp = None
 
             logid1 = int(m.get("logid1"), base=16) if m.get("logid1") else None
-            # logid2 = int(m.get("logid2"), base=16) if m.get("logid2") else None
             if logid1 in self.splitters and not any(
                 m.get("message", "").startswith(_) for _ in F5LogSheet.no_split_logs
             ):
@@ -520,11 +525,9 @@ class F5LogSheet(Sheet):
                 host=m.get("host"),
                 level=m.get("level"),
                 process=m.get("process"),
-                pid=int(m.get("pid")) if m.get("pid") is not None else None,
+                proc_pid=int(m.get("pid")) if m.get("pid") is not None else None,
                 logid1=m.get("logid1") if m.get("logid1") is not None else None,
                 logid2=m.get("logid2") if m.get("logid2") is not None else None,
-                # message=m.get("message"),
-                # kv=kv,
                 **kv,
             )
 
