@@ -10,7 +10,7 @@ It extracts common log entries, particularly around monitoring, iRules and confi
 
 ## Requirements
 
-[Visidata 2.x](www.visidata.org)
+[Visidata 2.x](https://www.visidata.org)
 
 ## Installation
 
