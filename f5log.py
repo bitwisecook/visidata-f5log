@@ -1,3 +1,7 @@
+__name__ = "f5log"
+__author__ = "James Deucker <me@bitwisecook.org>"
+__version__ = "0.1.0"
+
 from datetime import datetime, timedelta
 from functools import partial
 from ipaddress import ip_address
@@ -8,30 +12,6 @@ from visidata import Path, VisiData, Sheet, date, ColumnAttr, vd
 
 hexint = partial(int, base=16)
 delta_t = partial(int, base=10)
-re_f5log = re.compile(
-    r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>[a-z0-9_./]+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
-)
-re_ltm_irule = re.compile(
-    r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<src_ip>\S+)\s->\s(?P<dst_ip>\S+)|.*)"
-)
-re_ag_objname = re.compile(
-    r"(?:/Common/(?P<customer_id>[a-z0-9_]{1,23})-(?:\1-)?(?P<proxy_id>\d+)(?:_(?P<service_id>\d+)\.app/)?)"
-)
-re_ltm_pool_mon_status_msg = re.compile(
-    r"^Pool\s(?P<poolobj>\S+)\smember\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>\w+)\.\s\[\s(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?\s]\s+\[\swas\s(?P<prevstatus>\w+)\sfor\s(?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)sec\s\]$"
-)
-re_ltm_ip_msg = re.compile(
-    r"(?:.*?)(?P<ip1>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port1>\d+))?(?:(?:\s->\s|:)(?P<ip2>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port2>\d+))?)?(?:\smonitor\sstatus\s(?P<mon_status>\w+)\.\s\[[^]]+\]\s+\[\swas\s(?P<prev_status>\w+)\sfor\s((?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)secs?)\s\]|\.?(?:.*))"
-)
-re_ltm_conn_error = re.compile(
-    r"^Connection\serror:\s(?P<func>[^:]+):(?P<funcloc>[^:]+):\s(?P<error>.*)\s\((?P<errno>\d+)\)$"
-)
-re_ltm_cert_expiry = re.compile(
-    r"Certificate\s'(?P<cert_cn>.*)'\sin\sfile\s(?P<file>\S+)\s(?P<message>will\sexpire|expired)\son\s(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s\d+\s\S+)"
-)
-re_gtm_monitor = re.compile(
-    r"^(?:SNMP_TRAP:\s)?(?P<objtype>VS|Pool|Monitor|Wide\sIP|Server)\s(?P<object>\S+)\s(?:member\s(?P<pool_member>\S+)\s)?(?:\(ip(?::port)?=(?P<ipport>[^\)]+)\)\s)?(?:\(Server\s(?P<server>[^\)]+)\)\s)?(?:state\schange\s)?(?P<prev_status>\w+)\s-->\s(?P<new_status>\w+)(?:(?:\s\(\s?)(?P<msg>(?:(?P<type>\w+)\s(?P<monitor_object>\S+)\s:\s)?state:\s(?P<state>\S+)|.*)\))?"
-)
 
 vd.addType(ip_address, icon=":", formatter=lambda fmt, ip: str(ip))
 vd.addType(hexint, icon="ⓧ", formatter=lambda fmt, num: hex(num))
@@ -90,6 +70,31 @@ class F5LogSheet(Sheet):
         ColumnAttr("object", type=str),
     ]
 
+    re_f5log = re.compile(
+        r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>[a-z0-9_./]+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
+    )
+    re_ltm_irule = re.compile(
+        r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<src_ip>\S+)\s->\s(?P<dst_ip>\S+)|.*)"
+    )
+    re_ag_objname = re.compile(
+        r"(?:/Common/(?P<customer_id>[a-z0-9_]{1,23})-(?:\1-)?(?P<proxy_id>\d+)(?:_(?P<service_id>\d+)\.app/)?)"
+    )
+    re_ltm_pool_mon_status_msg = re.compile(
+        r"^Pool\s(?P<poolobj>\S+)\smember\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>\w+)\.\s\[\s(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?\s]\s+\[\swas\s(?P<prevstatus>\w+)\sfor\s(?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)sec\s\]$"
+    )
+    re_ltm_ip_msg = re.compile(
+        r"(?:.*?)(?P<ip1>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port1>\d+))?(?:(?:\s->\s|:)(?P<ip2>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port2>\d+))?)?(?:\smonitor\sstatus\s(?P<mon_status>\w+)\.\s\[[^]]+\]\s+\[\swas\s(?P<prev_status>\w+)\sfor\s((?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)secs?)\s\]|\.?(?:.*))"
+    )
+    re_ltm_conn_error = re.compile(
+        r"^Connection\serror:\s(?P<func>[^:]+):(?P<funcloc>[^:]+):\s(?P<error>.*)\s\((?P<errno>\d+)\)$"
+    )
+    re_ltm_cert_expiry = re.compile(
+        r"Certificate\s'(?P<cert_cn>.*)'\sin\sfile\s(?P<file>\S+)\s(?P<message>will\sexpire|expired)\son\s(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s\d+\s\S+)"
+    )
+    re_gtm_monitor = re.compile(
+        r"^(?:SNMP_TRAP:\s)?(?P<objtype>VS|Pool|Monitor|Wide\sIP|Server)\s(?P<object>\S+)\s(?:member\s(?P<pool_member>\S+)\s)?(?:\(ip(?::port)?=(?P<ipport>[^\)]+)\)\s)?(?:\(Server\s(?P<server>[^\)]+)\)\s)?(?:state\schange\s)?(?P<prev_status>\w+)\s-->\s(?P<new_status>\w+)(?:(?:\s\(\s?)(?P<msg>(?:(?P<type>\w+)\s(?P<monitor_object>\S+)\s:\s)?state:\s(?P<state>\S+)|.*)\))?"
+    )
+
     @staticmethod
     def split_audit_01420002(msg):
         # skip 'AUDIT - ' at the start of the line
@@ -143,7 +148,7 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_ltm_pool_mon_status(msg):
-        m = re_ltm_pool_mon_status_msg.match(msg)
+        m = F5LogSheet.re_ltm_pool_mon_status_msg.match(msg)
         if m is None:
             return
         m = m.groupdict()
@@ -205,7 +210,7 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_ltm_rule(msg):
-        m = re_ltm_irule.match(msg)
+        m = F5LogSheet.re_ltm_irule.match(msg)
         if m is None:
             return
         m = m.groupdict()
@@ -234,7 +239,7 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_ltm_cert_expiry(msg):
-        m = re_ltm_cert_expiry.match(msg)
+        m = F5LogSheet.re_ltm_cert_expiry.match(msg)
         if m is None:
             return
         m = m.groupdict()
@@ -252,7 +257,7 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_ltm_connection_error(msg):
-        m = re_ltm_conn_error.match(msg)
+        m = F5LogSheet.re_ltm_conn_error.match(msg)
         if m is None:
             return
         m = m.groupdict()
@@ -346,7 +351,7 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_gtm_monitor(msg):
-        m = re_gtm_monitor.match(msg)
+        m = F5LogSheet.re_gtm_monitor.match(msg)
         if m is None:
             return
         m = m.groupdict()
@@ -480,7 +485,7 @@ class F5LogSheet(Sheet):
         )
 
         for line in self.source:
-            m = re_f5log.match(line)
+            m = F5LogSheet.re_f5log.match(line)
             if m:
                 m = m.groupdict()
             else:
