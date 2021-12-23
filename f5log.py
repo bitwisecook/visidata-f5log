@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -287,7 +287,7 @@ class F5LogSheet(Sheet):
         if m is None:
             return
         m = m.groupdict()
-        y = {
+        yield {
             "irule_msg": m.get("irule_msg"),
             "object": m.get("irule"),
             "irule_event": m.get("event"),
@@ -297,18 +297,23 @@ class F5LogSheet(Sheet):
             src = m.get("src_ip")
             if src and len(src.split(":")) == 2:
                 # ipv4
-                y["src_ip"], y["src_port"] = src.split(":")
+                src_ip, src_port = src.split(":")
             else:
                 # ipv6
-                y["src_ip"], y["src_port"] = src.rsplit(":", maxsplit=1)
+                src_ip, src_port = src.split(".")
             dst = m.get("dst_ip")
             if dst and len(dst.split(":")) == 2:
                 # ipv4
-                y["dst_ip"], y["dst_port"] = dst.split(":")
+                dst_ip, dst_port = dst.split(":")
             else:
                 # ipv6
-                y["dst_ip"], y["dst_port"] = dst.rsplit(":", maxsplit=1)
-        yield y
+                dst_ip, dst_port = dst.split(".")
+            yield {
+                "src_ip": ip_address(src_ip),
+                "src_port": int(src_port),
+                "dst_ip": ip_address(dst_ip),
+                "dst_port": int(dst_port),
+            }
 
     @staticmethod
     def split_ltm_cert_expiry(msg):
@@ -363,13 +368,13 @@ class F5LogSheet(Sheet):
             src_ip, src_port = src.split(":")
         else:
             # ipv6
-            src_ip, src_port = src.rsplit(":", maxsplit=1)
+            src_ip, src_port = src.split(".")
         dst = msg.split(" ")[7]
         if len(dst.split(":")) == 2:
             # ipv4
             dst_ip, dst_port = dst.split(":")
         else:
-            dst_ip, dst_port = dst.rsplit(":", maxsplit=1)
+            dst_ip, dst_port = dst.split(".")
         yield {
             "src_ip": ip_address(src_ip),
             "src_port": int(src_port),
@@ -381,17 +386,8 @@ class F5LogSheet(Sheet):
     def split_ltm_shared_ciphers(msg):
         m = msg.split(" ")[-1][:-1]
         src, dst = m.split(":")
-        if len(src.rsplit(":", maxsplit=1)) == 5:
-            # ipv4
-            src_ip, src_port = src[: src.rfind(".")], src[src.rfind(".") + 1 :]
-        else:
-            # ipv6
-            src_ip, src_port = src[: src.rfind(".")], src[src.rfind(".") + 1 :]
-        if len(dst.rsplit(":", maxsplit=1)) == 5:
-            # ipv4
-            dst_ip, dst_port = dst[: dst.rfind(".")], dst[dst.rfind(".") + 1 :]
-        else:
-            dst_ip, dst_port = dst[: dst.rfind(".")], dst[dst.rfind(".") + 1 :]
+        src_ip, src_port = src.rsplit(".", maxsplit=1)
+        dst_ip, dst_port = dst.rsplit(".", maxsplit=1)
         yield {
             "src_ip": ip_address(src_ip),
             "src_port": int(src_port),
@@ -408,7 +404,7 @@ class F5LogSheet(Sheet):
             src_ip, src_port = src.split(":")
         else:
             # ipv6
-            src_ip, src_port = src.rsplit(":", maxsplit=1)
+            src_ip, src_port = src.rsplit(".", maxsplit=1)
         if len(dst.split(":")) == 2:
             # ipv4
             dst_ip, dst_port = dst.split(":")
@@ -430,7 +426,7 @@ class F5LogSheet(Sheet):
         m = m.groupdict()
         dst = m.get("ipport")
         if dst:
-            if len(dst.rsplit(":", maxsplit=1)) == 4:
+            if len(dst.split(".")) == 4:
                 # ipv4
                 if ":" in dst:
                     dst_ip, dst_port = dst.split(":")
@@ -467,22 +463,22 @@ class F5LogSheet(Sheet):
         if m is None:
             return
         m = m.groupdict()
-        if m.get('monip'):
-            if len(m.get('monip').split(":")) == 2:
+        if m.get("monip"):
+            if len(m.get("monip").split(":")) == 2:
                 # ipv4
-                dst_ip, dst_port = m.get('monip').split(":")
+                dst_ip, dst_port = m.get("monip").split(":")
             else:
-                dst_ip, dst_port = m.get('monip').rsplit(":", maxsplit=1)
+                dst_ip, dst_port = m.get("monip").rsplit(":", maxsplit=1)
         else:
             dst_ip, dst_port = None, None
         yield {
-            "object": m.get('object'),
+            "object": m.get("object"),
             "dst_ip": ip_address(dst_ip) if dst_ip else None,
             "dst_port": int(dst_port) if dst_port else None,
-            "prev_status": m.get('prevstatus','').lower(),
-            "new_status": m.get('newstatus','').lower(),
-            "src_gtm": m.get('srcgtm'),
-            "state": m.get('state').lower(),
+            "prev_status": m.get("prevstatus", "").lower(),
+            "new_status": m.get("newstatus", "").lower(),
+            "src_gtm": m.get("srcgtm"),
+            "state": m.get("state").lower(),
         }
 
     splitters = {
