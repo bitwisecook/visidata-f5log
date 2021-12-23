@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -435,7 +435,7 @@ class F5LogSheet(Sheet):
             else:
                 # ipv6
                 if "." in dst:
-                    dsthost, dstport = dst.rsplit(":", maxsplit=1)
+                    dsthost, dstport = dst.rsplit(".", maxsplit=1)
                 else:
                     dsthost, dstport = dst, None
         else:
