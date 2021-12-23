@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.2.5"
+__version__ = "0.3.0"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -31,7 +31,7 @@ theme("color_f5log_mon_disabled", "black", "color of monitor status disabled")
 theme(
     "color_f5log_logid_warning", "red", "color of something urgent to pay attention to"
 )
-
+vd.option("f5log_object_regex", None, "A regex to perform on the object name, useful where object names have a structure to extract. Use the (?P<foo>...) named groups form to get column names.")
 
 class F5LogSheet(Sheet):
     class F5LogRow:
@@ -575,6 +575,15 @@ class F5LogSheet(Sheet):
             "%Y"
         )
 
+        if vd.options.get("f5log_object_regex"):
+            try:
+                object_regex = re.compile(vd.options.get("f5log_object_regex"))
+            except re.error as exc:
+                # TODO: make this error into the errors sheet
+                object_regex =None
+        else:
+            object_regex = None
+
         for line in self.source:
             m = F5LogSheet.re_f5log.match(line)
             if m:
@@ -617,6 +626,10 @@ class F5LogSheet(Sheet):
                             )
                         ),
                     }
+                if "object" in kv and object_regex:
+                    om = object_regex.match(kv.get("object",""))
+                    if om:
+                        kv.update(om.groupdict())
                 for k, v in kv.items():
                     if k not in self.extra_cols:
                         F5LogSheet.addColumn(self, ColumnAttr(k))

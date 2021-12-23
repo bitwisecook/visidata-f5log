@@ -15,3 +15,17 @@ It extracts common log entries, particularly around monitoring, iRules and confi
 ## Installation
 
 Inside visidata, `<space>` to start a command, `open-plugins` to open the plugin sheet, scroll to `f5log` and press `a` to install the latest version.
+
+## Configuration
+
+`f5log_object_regex` provides a simple way to perform a regex on an object name extracted by a splitter and get extra columns out of it. This is very useful when objectnames have a structure. Simply use named groups in your regex to get named columns out.
+
+Regex:
+```(?:/Common/)(?P<site>[^-]+)-(?P<vstype>[^-]+)-(?P<application>[^-]+)```
+
+```
+/Common/newyork-www-banking1
+
+... | site    | vstype | appliction | ...
+... | newyork | www    | banking1   | ...
+```
