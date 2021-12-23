@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -85,7 +85,7 @@ class F5LogSheet(Sheet):
         r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>[a-z0-9_./]+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
     )
     re_ltm_irule = re.compile(
-        r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<src_ip>\S+)\s->\s(?P<dst_ip>\S+)|.*)"
+        r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<srchost>\S+)\s->\s(?P<dsthost>\S+)|.*)"
     )
     re_ltm_pool_mon_status_msg = re.compile(
         r"^(Pool|Node)\s(?P<poolobj>\S+)\s(member|address)\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>.+)\.\s\[\s((?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?)?\s]\s+\[\swas\s(?P<prevstatus>.+)\sfor\s(?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)sec\s\]$"
@@ -223,25 +223,25 @@ class F5LogSheet(Sheet):
             dst = dst.split("/")[-1]
             if "." in dst and len(dst.split(":")) == 2:
                 # ipv4
-                dst_ip, dst_port = dst.split(":")
+                dsthost, dstport = dst.split(":")
             elif "." in dst and len(dst.split(":")) == 1:
                 # ipv4
-                dst_ip, dst_port = dst, None
+                dsthost, dstport = dst, None
             else:
                 # ipv6
-                dst_ip, dst_port = dst.rsplit(":", maxsplit=1)
+                dsthost, dstport = dst.rsplit(":", maxsplit=1)
             try:
                 # see if it's an IP and if so parse it
-                dst_ip = ip_address(dst_ip)
+                dsthost = ip_address(dsthost)
             except ValueError:
-                dst_ip = None
+                dsthost = None
             try:
                 # see if it's a port number and if so parse it
-                dst_port = int(dst_port)
+                dstport = int(dstport)
             except (ValueError, TypeError):
-                dst_port = None
+                dstport = None
         else:
-            dst_ip, dst_port = None, None
+            dsthost, dstport = None, None
         yield {
             "object": m.get("poolobj"),
             "pool_member": m.get("poolmemberobj"),
@@ -251,8 +251,8 @@ class F5LogSheet(Sheet):
             "last_error": m.get("lasterr"),
             "prev_status": m.get("prevstatus"),
             "duration_s": duration,
-            "dst_ip": dst_ip,
-            "dst_port": dst_port,
+            "dsthost": dsthost,
+            "dstport": dstport,
         }
 
     @staticmethod
@@ -294,25 +294,25 @@ class F5LogSheet(Sheet):
             "message": m.get("message"),
         }
         if m.get("message", "").startswith("aborted for"):
-            src = m.get("src_ip")
+            src = m.get("srchost")
             if src and len(src.split(":")) == 2:
                 # ipv4
-                src_ip, src_port = src.split(":")
+                srchost, srcport = src.split(":")
             else:
                 # ipv6
-                src_ip, src_port = src.split(".")
-            dst = m.get("dst_ip")
+                srchost, srcport = src.split(".")
+            dst = m.get("dsthost")
             if dst and len(dst.split(":")) == 2:
                 # ipv4
-                dst_ip, dst_port = dst.split(":")
+                dsthost, dstport = dst.split(":")
             else:
                 # ipv6
-                dst_ip, dst_port = dst.split(".")
+                dsthost, dstport = dst.split(".")
             yield {
-                "src_ip": ip_address(src_ip),
-                "src_port": int(src_port),
-                "dst_ip": ip_address(dst_ip),
-                "dst_port": int(dst_port),
+                "srchost": ip_address(srchost),
+                "srcport": int(srcport),
+                "dsthost": ip_address(dsthost),
+                "dstport": int(dstport),
             }
 
     @staticmethod
@@ -365,34 +365,34 @@ class F5LogSheet(Sheet):
         src = msg.split(" ")[5]
         if len(src.split(":")) == 2:
             # ipv4
-            src_ip, src_port = src.split(":")
+            srchost, srcport = src.split(":")
         else:
             # ipv6
-            src_ip, src_port = src.split(".")
+            srchost, srcport = src.split(".")
         dst = msg.split(" ")[7]
         if len(dst.split(":")) == 2:
             # ipv4
-            dst_ip, dst_port = dst.split(":")
+            dsthost, dstport = dst.split(":")
         else:
-            dst_ip, dst_port = dst.split(".")
+            dsthost, dstport = dst.split(".")
         yield {
-            "src_ip": ip_address(src_ip),
-            "src_port": int(src_port),
-            "dst_ip": ip_address(dst_ip),
-            "dst_port": int(dst_port),
+            "srchost": ip_address(srchost),
+            "srcport": int(srcport),
+            "dsthost": ip_address(dsthost),
+            "dstport": int(dstport),
         }
 
     @staticmethod
     def split_ltm_shared_ciphers(msg):
         m = msg.split(" ")[-1][:-1]
         src, dst = m.split(":")
-        src_ip, src_port = src.rsplit(".", maxsplit=1)
-        dst_ip, dst_port = dst.rsplit(".", maxsplit=1)
+        srchost, srcport = src.rsplit(".", maxsplit=1)
+        dsthost, dstport = dst.rsplit(".", maxsplit=1)
         yield {
-            "src_ip": ip_address(src_ip),
-            "src_port": int(src_port),
-            "dst_ip": ip_address(dst_ip),
-            "dst_port": int(dst_port),
+            "srchost": ip_address(srchost),
+            "srcport": int(srcport),
+            "dsthost": ip_address(dsthost),
+            "dstport": int(dstport),
         }
 
     @staticmethod
@@ -401,20 +401,20 @@ class F5LogSheet(Sheet):
         src, dst = m[3].strip(","), m[5].strip(",")
         if len(src.split(":")) == 2:
             # ipv4
-            src_ip, src_port = src.split(":")
+            srchost, srcport = src.split(":")
         else:
             # ipv6
-            src_ip, src_port = src.rsplit(".", maxsplit=1)
+            srchost, srcport = src.rsplit(".", maxsplit=1)
         if len(dst.split(":")) == 2:
             # ipv4
-            dst_ip, dst_port = dst.split(":")
+            dsthost, dstport = dst.split(":")
         else:
-            dst_ip, dst_port = dst.rsplit(":", maxsplit=1)
+            dsthost, dstport = dst.rsplit(":", maxsplit=1)
         yield {
-            "src_ip": ip_address(src_ip),
-            "src_port": int(src_port),
-            "dst_ip": ip_address(dst_ip),
-            "dst_port": int(dst_port),
+            "srchost": ip_address(srchost),
+            "srcport": int(srcport),
+            "dsthost": ip_address(dsthost),
+            "dstport": int(dstport),
             "rst_reason": m[6],
         }
 
@@ -429,23 +429,23 @@ class F5LogSheet(Sheet):
             if len(dst.split(".")) == 4:
                 # ipv4
                 if ":" in dst:
-                    dst_ip, dst_port = dst.split(":")
+                    dsthost, dstport = dst.split(":")
                 else:
-                    dst_ip, dst_port = dst, None
+                    dsthost, dstport = dst, None
             else:
                 # ipv6
                 if "." in dst:
-                    dst_ip, dst_port = dst.rsplit(":", maxsplit=1)
+                    dsthost, dstport = dst.rsplit(":", maxsplit=1)
                 else:
-                    dst_ip, dst_port = dst, None
+                    dsthost, dstport = dst, None
         else:
-            dst_ip, dst_port = None, None
+            dsthost, dstport = None, None
         yield {
             "objtype": m.get("objtype"),
             "object": m.get("object"),
             "pool_member": m.get("pool_member"),
-            "dst_ip": ip_address(dst_ip) if dst_ip else None,
-            "dst_port": int(dst_port) if dst_port else None,
+            "dsthost": ip_address(dsthost) if dsthost else None,
+            "dstport": int(dstport) if dstport else None,
             "server": m.get("server"),
             "prev_status": m.get("prev_status").lower()
             if m.get("prev_status")
@@ -466,15 +466,15 @@ class F5LogSheet(Sheet):
         if m.get("monip"):
             if len(m.get("monip").split(":")) == 2:
                 # ipv4
-                dst_ip, dst_port = m.get("monip").split(":")
+                dsthost, dstport = m.get("monip").split(":")
             else:
-                dst_ip, dst_port = m.get("monip").rsplit(":", maxsplit=1)
+                dsthost, dstport = m.get("monip").rsplit(":", maxsplit=1)
         else:
-            dst_ip, dst_port = None, None
+            dsthost, dstport = None, None
         yield {
             "object": m.get("object"),
-            "dst_ip": ip_address(dst_ip) if dst_ip else None,
-            "dst_port": int(dst_port) if dst_port else None,
+            "dsthost": ip_address(dsthost) if dsthost else None,
+            "dstport": int(dstport) if dstport else None,
             "prev_status": m.get("prevstatus", "").lower(),
             "new_status": m.get("newstatus", "").lower(),
             "src_gtm": m.get("srcgtm"),
