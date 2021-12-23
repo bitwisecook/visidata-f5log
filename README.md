@@ -14,3 +14,4 @@ It extracts common log entries, particularly around monitoring, iRules and confi
 
 ## Installation
 
+Inside visidata, `<space>` to start a command, `open-plugins` to open the plugin sheet, scroll to `f5log` and press `a` to install the latest version.
