@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -595,7 +595,7 @@ class F5LogSheet(Sheet):
                 )
             elif m.get("date2"):
                 timestamp = datetime.strptime(
-                    m.get("date2").replace("+", "-"), "%Y-%m-%dT%H:%M:%S-%z"
+                    m.get("date2"), "%Y-%m-%dT%H:%M:%S%z"
                 )
             else:
                 timestamp = None
