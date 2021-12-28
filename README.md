@@ -14,11 +14,23 @@ It extracts common log entries, particularly around monitoring, iRules and confi
 
 ## Installation
 
+### Using the built-in plugin manager
+
 Inside visidata, `<space>` to start a command, `open-plugins` to open the plugin sheet, scroll to `f5log` and press `a` to install the latest version.
+
+_this wil be available once [PR#1253](https://github.com/saulpw/visidata/pull/1253) is merged_
+
+### Manual Installation on MacOS / Linux / *BSD
+
+```sh
+mkdir -p .visidata/plugins
+curl -o ~/.visidata/plugins/f5log.py https://raw.githubusercontent.com/bitwisecook/visidata-f5log/0.3.1/f5log.py
+echo 'import plugins.f5log' >> ~/.visidata/plugins/init.py
+```
 
 ## Configuration
 
-`f5log_object_regex` provides a simple way to perform a regex on an object name extracted by a splitter and get extra columns out of it. This is very useful when objectnames have a structure. Simply use named groups in your regex to get named columns out.
+`f5log_object_regex` provides a simple way to perform a regex on an object name extracted by a splitter and get extra columns out of it. This is very useful when objectnames have a structure. Simply use [named groups](https://docs.python.org/3/howto/regex.html#non-capturing-and-named-groups) in your regex to get named columns out.
 
 Regex:
 ```(?:/Common/)(?P<site>[^-]+)-(?P<vstype>[^-]+)-(?P<application>[^-]+)```
@@ -28,4 +40,10 @@ Regex:
 
 ... | site    | vstype | appliction | ...
 ... | newyork | www    | banking1   | ...
+```
+
+### Adding to `.visidatarc`
+
+```sh
+echo 'visidata.vd.options.set("f5log_object_regex", r"(?:/Common/)(?P<site>[^-]+)-(?P<vstype>[^-]+)-(?P<application>[^-]+)", obj="global")' > ~/.visidatarc
 ```
