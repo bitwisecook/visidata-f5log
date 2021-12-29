@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -13,11 +13,22 @@ from visidata import Path, VisiData, Sheet, date, ColumnAttr, vd, theme
 from visidata.column import Column
 from visidata.sheets import CellColorizer, RowColorizer
 
-hexint = partial(int, base=16)
-delta_t = partial(int, base=10)
+
+class hexint(int):
+    def __new__(cls, value, *args, **kwargs):
+        return super(cls, cls).__new__(cls, value, base=16)
+
+    def __str__(self):
+        return hex(self)
+
+
+class delta_t(int):
+    def __new__(cls, value, *args, **kwargs):
+        return super(cls, cls).__new__(cls, value, base=10)
+
 
 vd.addType(ip_address, icon=":", formatter=lambda fmt, ip: str(ip))
-vd.addType(hexint, icon="ⓧ", formatter=lambda fmt, num: hex(num))
+vd.addType(hexint, icon="ⓧ", formatter=lambda fmt, num: str(num))
 vd.addType(
     delta_t,
     icon="⇥",
@@ -31,14 +42,19 @@ theme("color_f5log_mon_disabled", "black", "color of monitor status disabled")
 theme(
     "color_f5log_logid_warning", "red", "color of something urgent to pay attention to"
 )
-vd.option("f5log_object_regex", None, "A regex to perform on the object name, useful where object names have a structure to extract. Use the (?P<foo>...) named groups form to get column names.")
+vd.option(
+    "f5log_object_regex",
+    None,
+    "A regex to perform on the object name, useful where object names have a structure to extract. Use the (?P<foo>...) named groups form to get column names.",
+)
+
 
 class F5LogSheet(Sheet):
     class F5LogRow:
         def __init__(
             self,
             msg: str = None,
-            date_time: datetime = None,
+            timestamp: datetime = None,
             host: str = None,
             level: str = None,
             process: str = None,
@@ -51,7 +67,7 @@ class F5LogSheet(Sheet):
         ):
             self._data = {
                 "msg": msg,
-                "date_time": date_time,
+                "timestamp": timestamp,
                 "host": host,
                 "level": level,
                 "process": process,
@@ -66,11 +82,27 @@ class F5LogSheet(Sheet):
         def __getattr__(self, item):
             return self._data.get(item)
 
+    # strptime is slow so we we need to parse manually
+    _months = {
+        "Jan": 1,
+        "Feb": 2,
+        "Mar": 3,
+        "Apr": 4,
+        "May": 5,
+        "Jun": 6,
+        "Jul": 7,
+        "Aug": 8,
+        "Sep": 9,
+        "Oct": 10,
+        "Nov": 11,
+        "Dec": 12,
+    }
+
     rowtype = "logs"
 
     columns = [
         ColumnAttr("rawmsg", type=str),
-        ColumnAttr("date_time", type=date),
+        ColumnAttr("timestamp", type=date),
         ColumnAttr("host", type=str),
         ColumnAttr("level", type=str),
         ColumnAttr("process", type=str),
@@ -441,7 +473,7 @@ class F5LogSheet(Sheet):
         else:
             dsthost, dstport = None, None
         yield {
-            "objtype": m.get("objtype"),
+            "objtype": m.get("objtype").lower() if m.get("objtype") else None,
             "object": m.get("object"),
             "pool_member": m.get("pool_member"),
             "dsthost": ip_address(dsthost) if dsthost else None,
@@ -452,7 +484,7 @@ class F5LogSheet(Sheet):
             else None,
             "new_status": m.get("new_status").lower() if m.get("new_status") else None,
             "msg": m.get("msg"),
-            "type": m.get("type"),
+            "type": m.get("type").lower() if m.get("type") in m else None,
             "monitor_object": m.get("monitor_object"),
             "state": m.get("state"),
         }
@@ -549,7 +581,7 @@ class F5LogSheet(Sheet):
 
     extra_cols = {
         "rawmsg",
-        "date_time",
+        "timestamp",
         "host",
         "level",
         "process",
@@ -571,16 +603,17 @@ class F5LogSheet(Sheet):
 
         # the default F5 logs don't have the year so we have to guess from the file ctime
         # TODO: make this overridable
-        self._year = datetime.utcfromtimestamp(self.source.stat().st_ctime).strftime(
-            "%Y"
-        )
+        try:
+            self._year = datetime.utcfromtimestamp(self.source.stat().st_ctime).year
+        except AttributeError:
+            self._year = datetime.now().year
 
         if vd.options.get("f5log_object_regex"):
             try:
                 object_regex = re.compile(vd.options.get("f5log_object_regex"))
             except re.error as exc:
                 # TODO: make this error into the errors sheet
-                object_regex =None
+                object_regex = None
         else:
             object_regex = None
 
@@ -598,14 +631,19 @@ class F5LogSheet(Sheet):
                 "message": m.get("message"),
             }
             if m.get("date1"):
-                timestamp = datetime.strptime(
-                    f"{self._year} {m.get('date1').replace('  ', ' ')}",
-                    "%Y %b %d %H:%M:%S",
+                #
+                _t = m.get("date1")
+                # strptime is quite slow so we need to manually extract the time on the hot path
+                timestamp = datetime(
+                    year=self._year,
+                    month=self._months[_t[:3]],
+                    day=int(_t[4:6]),
+                    hour=int(_t[7:9]),
+                    minute=int(_t[10:12]),
+                    second=int(_t[13:15]),
                 )
             elif m.get("date2"):
-                timestamp = datetime.strptime(
-                    m.get("date2"), "%Y-%m-%dT%H:%M:%S%z"
-                )
+                timestamp = datetime.strptime(m.get("date2"), "%Y-%m-%dT%H:%M:%S%z")
             else:
                 timestamp = None
 
@@ -627,7 +665,7 @@ class F5LogSheet(Sheet):
                         ),
                     }
                 if "object" in kv and object_regex:
-                    om = object_regex.match(kv.get("object",""))
+                    om = object_regex.match(kv.get("object", ""))
                     if om:
                         kv.update(om.groupdict())
                 for k, v in kv.items():
@@ -639,7 +677,7 @@ class F5LogSheet(Sheet):
                     kv.update(entry)
             yield F5LogSheet.F5LogRow(
                 # rawmsg=line,
-                date_time=timestamp,
+                timestamp=timestamp,
                 host=m.get("host"),
                 level=m.get("level"),
                 process=m.get("process"),
