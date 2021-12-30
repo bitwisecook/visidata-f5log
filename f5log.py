@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -140,6 +140,9 @@ class F5LogSheet(Sheet):
     re_ltm_poolnode_abled = re.compile(
         r"^(?P<objtype>Pool|Node)\s(?P<object>\S+)\s(?:address|member)\s(?P<member>\S+)\ssession\sstatus\s(?P<status>.+)\.$"
     )
+    re_ltm_no_shared_ciphers = re.compile(
+        r"^(?P<msg>No\sshared\sciphers\sbetween\sSSL\speers)\s(?P<srchost>\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)\.(?P<srcport>\d+)\:(?P<dsthost>\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)\.(?P<dstport>\d+)\.$"
+    )
 
     f5log_mon_colors = {
         ("monitor_status", "down"): "color_f5log_mon_down",
@@ -221,6 +224,8 @@ class F5LogSheet(Sheet):
             if ee[0].startswith("tmsh-pid-"):
                 # of course tmsh-pid- is different
                 yield {ee[0][: ee[0].rfind("-")]: int(ee[0][ee[0].rfind("-") + 1 :])}
+            elif len(ee) == 1:
+                yield {ee[0]: None}
             else:
                 yield {ee[0]: ee[1]}
 
@@ -323,7 +328,7 @@ class F5LogSheet(Sheet):
             "irule_msg": m.get("irule_msg"),
             "object": m.get("irule"),
             "irule_event": m.get("event"),
-            "message": m.get("message"),
+            "msg": m.get("message"),
         }
         if m.get("message", "").startswith("aborted for"):
             src = m.get("srchost")
@@ -416,21 +421,22 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_ltm_shared_ciphers(msg):
-        m = msg.split(" ")[-1][:-1]
-        src, dst = m.split(":")
-        srchost, srcport = src.rsplit(".", maxsplit=1)
-        dsthost, dstport = dst.rsplit(".", maxsplit=1)
+        m = F5LogSheet.re_ltm_no_shared_ciphers.match(msg)
+        if m is None:
+            return
+        m = m.groupdict()
         yield {
-            "srchost": ip_address(srchost),
-            "srcport": int(srcport),
-            "dsthost": ip_address(dsthost),
-            "dstport": int(dstport),
+            "srchost": ip_address(m.get("srchost")),
+            "srcport": int(m.get("srcport")),
+            "dsthost": ip_address(m.get("dsthost")),
+            "dstport": int(m.get("dstport")),
         }
 
     @staticmethod
     def split_ltm_rst_reason(msg):
-        m = msg.split(" ", maxsplit=6)
+        m = msg.split(" ", maxsplit=7)
         src, dst = m[3].strip(","), m[5].strip(",")
+        reasonc1, reasonc2 = m[6].split(':')
         if len(src.split(":")) == 2:
             # ipv4
             srchost, srcport = src.split(":")
@@ -447,7 +453,9 @@ class F5LogSheet(Sheet):
             "srcport": int(srcport),
             "dsthost": ip_address(dsthost),
             "dstport": int(dstport),
-            "rst_reason": m[6],
+            "rst_reason_code1": hexint(reasonc1[3:]),
+            "rst_reason_code2": hexint(reasonc2[:-1]),
+            "rst_reason": m[7],
         }
 
     @staticmethod
@@ -598,15 +606,17 @@ class F5LogSheet(Sheet):
         RowColorizer(101, None, colorizeWarnings),
     ]
 
-    def iterload(self):
-        self.rows = []  # rowdef: [F5LogRow]
-
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         # the default F5 logs don't have the year so we have to guess from the file ctime
         # TODO: make this overridable
         try:
             self._year = datetime.utcfromtimestamp(self.source.stat().st_ctime).year
         except AttributeError:
             self._year = datetime.now().year
+
+    def iterload(self):
+        self.rows = []  # rowdef: [F5LogRow]
 
         if vd.options.get("f5log_object_regex"):
             try:
@@ -634,14 +644,24 @@ class F5LogSheet(Sheet):
                 #
                 _t = m.get("date1")
                 # strptime is quite slow so we need to manually extract the time on the hot path
-                timestamp = datetime(
-                    year=self._year,
-                    month=self._months[_t[:3]],
-                    day=int(_t[4:6]),
-                    hour=int(_t[7:9]),
-                    minute=int(_t[10:12]),
-                    second=int(_t[13:15]),
-                )
+                try:
+                    timestamp = datetime(
+                        year=self._year,
+                        month=self._months[_t[:3]],
+                        day=int(_t[4:6]),
+                        hour=int(_t[7:9]),
+                        minute=int(_t[10:12]),
+                        second=int(_t[13:15]),
+                    )
+                except ValueError as exc:
+                    yield F5LogSheet.F5LogRow(
+                        rawmsg=line,
+                        PARSE_ERROR="\n".join(
+                            traceback.format_exception(
+                                etype=type(exc), value=exc, tb=exc.__traceback__
+                            ),
+                        ),
+                    )
             elif m.get("date2"):
                 timestamp = datetime.strptime(m.get("date2"), "%Y-%m-%dT%H:%M:%S%z")
             else:
@@ -656,14 +676,14 @@ class F5LogSheet(Sheet):
                         kv.update(entry)
                 except (IndexError, ValueError) as exc:
                     # TODO: somehow make this use an error sheet
-                    kv = {
-                        "rawmsg": line,
-                        "PARSE_ERROR": "\n".join(
+                    yield F5LogSheet.F5LogRow(
+                        rawmsg=line,
+                        PARSE_ERROR="\n".join(
                             traceback.format_exception(
                                 etype=type(exc), value=exc, tb=exc.__traceback__
                             )
                         ),
-                    }
+                    )
                 if "object" in kv and object_regex:
                     om = object_regex.match(kv.get("object", ""))
                     if om:
