@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -281,6 +281,7 @@ class F5LogSheet(Sheet):
             dsthost, dstport = None, None
         yield {
             "object": m.get("poolobj"),
+            "objtype": "pool",
             "pool_member": m.get("poolmemberobj"),
             "new_status": m.get("newstatus"),
             "monitor": m.get("monitorobj"),
@@ -300,6 +301,7 @@ class F5LogSheet(Sheet):
         m = m.groupdict()
         yield {
             "object": m.get("object"),
+            "objtype": "pool",
             "member": m.get("member"),
             "monitor_status": m.get("status"),
         }
@@ -308,6 +310,7 @@ class F5LogSheet(Sheet):
     def split_ltm_pool_has_no_avail_mem(msg):
         yield {
             "object": msg.split(" ")[-1],
+            "objtype": "pool",
             "new_status": "no members available",
         }
 
@@ -315,6 +318,7 @@ class F5LogSheet(Sheet):
     def split_ltm_pool_has_avail_mem(msg):
         yield {
             "object": msg.split(" ")[1],
+            "objtype": "pool",
             "new_status": "now has available members",
         }
 
@@ -327,6 +331,7 @@ class F5LogSheet(Sheet):
         yield {
             "irule_msg": m.get("irule_msg"),
             "object": m.get("irule"),
+            "objtype": "rule",
             "irule_event": m.get("event"),
             "msg": m.get("message"),
         }
@@ -361,13 +366,14 @@ class F5LogSheet(Sheet):
         yield {
             "cert_cn": m.get("cert_cn"),
             "object": m.get("file"),
+            "objtype": "ssl-cert",
             "date": datetime.strptime(
                 m.get("date1").replace("  ", " "),
                 "%b %d %H:%M:%S %Y %Z",
             )
             if m.get("date1") is not None
             else None,
-            "message": m.get("message"),
+            "msg": m.get("message"),
         }
 
     @staticmethod
@@ -389,11 +395,13 @@ class F5LogSheet(Sheet):
         if m[0] == "SNMP_TRAP:":
             yield {
                 "object": m[2],
+                "objtype": "vs",
                 "new_status": m[-1],
             }
         else:
             yield {
                 "object": m[1],
+                "objtype": "vs",
                 "new_status": m[-1],
             }
 
@@ -513,6 +521,7 @@ class F5LogSheet(Sheet):
             dsthost, dstport = None, None
         yield {
             "object": m.get("object"),
+            "objtype": "monitor",
             "dsthost": ip_address(dsthost) if dsthost else None,
             "dstport": int(dstport) if dstport else None,
             "prev_status": m.get("prevstatus", "").lower(),
@@ -529,6 +538,7 @@ class F5LogSheet(Sheet):
             "dstmac": m[5].strip("()"),
             "dsthost": ip_address(dsthost),
             "object": m[7],
+            "objtype": "address",
         }
 
     splitters = {
