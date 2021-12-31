@@ -27,7 +27,11 @@ class LineRememberer:
 def replace_msg(msg):
     ret=msg
     for replacer in gentests_replacers.replacers:
-        ret = replacer(ret)
+        try:
+            ret = replacer(ret)
+        except Exception as e:
+            print(msg)
+            raise e
     return ret
 
 def parse_lines(f, logkeys, logs):
@@ -41,7 +45,7 @@ def parse_lines(f, logkeys, logs):
                 logs.write(replace_msg(ls.source.last_line))
                 continue
             if line.logid1 is None:
-                if line.message.split(" ")[0].split(".")[0] not in logkeys:
+                if line.message.split(" ")[0].split(".")[0].split("[")[0] not in logkeys:
                     logs.write(replace_msg(ls.source.last_line))
                     logkeys.add(line.message.split(" ")[0].split(".")[0])
                     continue
