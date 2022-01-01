@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.5"
+__version__ = "0.3.6"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -42,9 +42,7 @@ theme("color_f5log_mon_disabled", "black", "color of monitor status disabled")
 theme(
     "color_f5log_logid_warning", "red", "color of something urgent to pay attention to"
 )
-theme(
-    "color_f5log_logid_notice", "cyan", "color of something to notice"
-)
+theme("color_f5log_logid_notice", "cyan", "color of something to notice")
 vd.option(
     "f5log_object_regex",
     None,
@@ -83,7 +81,9 @@ class F5LogSheet(Sheet):
             }
 
         def __getattr__(self, item):
-            return self._data.get(item, self._data["kv"].get(item) if self._data["kv"] else None)
+            return self._data.get(
+                item, self._data["kv"].get(item) if self._data["kv"] else None
+            )
 
     # strptime is slow so we need to parse manually
     _months = {
@@ -186,10 +186,14 @@ class F5LogSheet(Sheet):
 
     f5log_warn_logid = {"01190004": "color_f5log_logid_warning"}
 
-    def colorizeWarnings(sheet, col: Column, row: F5LogRow, value):
+    def colorizeRows(sheet, col: Column, row: F5LogRow, value):
         if row is None or col is None:
             return None
-        if row.logid1 is None and row.message.startswith("boot_marker"):
+        if (
+            row.logid1 is None
+            and row.message is not None
+            and row.message.startswith("boot_marker")
+        ):
             return "color_f5log_logid_notice"
         return sheet.f5log_warn_logid.get(row.logid1, None)
 
@@ -213,15 +217,31 @@ class F5LogSheet(Sheet):
     def split_audit_mcpd_mcp_error(msg):
         # skip 'AUDIT - ' at the start of the line
         # skip the status at the end of the line
-        if msg[msg.rfind("[Status=") :].startswith("[Status="):
-            e = msg[8 : msg.rfind("[Status=") - 1].split(" - ")
-            status = msg[msg.rfind("[Status=") + 1 : -1]
+        msg = msg[8:]
+        status = None
+        status_loc = msg.rfind("[Status=")
+        if status_loc >= 0:
+            status = msg[status_loc + 1 : -1]
+            msg = msg[: status_loc - 1]
             yield {
                 status.split("=", maxsplit=1)[0]: status.split("=", maxsplit=1)[1],
             }
-        else:
-            e = msg[8:].split(" - ")
-            status = None
+        # we need to get one word back from the first opening curly
+        # find the curly
+        cmd_data_loc = msg.find(" { ")
+        if cmd_data_loc >= 0:
+            # get the cmd_data
+            cmd_data = msg[cmd_data_loc + 1 :]
+            # split the message and the command
+            msg, cmd = msg[:cmd_data_loc].rsplit(" ", maxsplit=1)
+            # strip off the trailling " -" from the message
+            msg = msg[:-2]
+            yield {
+                "command": cmd,
+                "cmd_data": cmd_data,
+            }
+
+        e = msg.split(" - ")
 
         for ee in e[0].split(","):
             ee = ee.strip().split(" ")
@@ -620,7 +640,7 @@ class F5LogSheet(Sheet):
     # precedence, coloropt, func
     colorizers = [
         CellColorizer(100, None, colorizeMonitors),
-        RowColorizer(101, None, colorizeWarnings),
+        RowColorizer(101, None, colorizeRows),
     ]
 
     def __init__(self, *args, **kwargs):
