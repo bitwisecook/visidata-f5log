@@ -42,6 +42,9 @@ theme("color_f5log_mon_disabled", "black", "color of monitor status disabled")
 theme(
     "color_f5log_logid_warning", "red", "color of something urgent to pay attention to"
 )
+theme(
+    "color_f5log_logid_notice", "cyan", "color of something to notice"
+)
 vd.option(
     "f5log_object_regex",
     None,
@@ -186,6 +189,8 @@ class F5LogSheet(Sheet):
     def colorizeWarnings(sheet, col: Column, row: F5LogRow, value):
         if row is None or col is None:
             return None
+        if row.logid1 is None and row.message.startswith("boot_marker"):
+            return "color_f5log_logid_notice"
         return sheet.f5log_warn_logid.get(row.logid1, None)
 
     @staticmethod
