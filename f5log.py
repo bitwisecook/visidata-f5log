@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.7"
+__version__ = "0.3.8"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -338,8 +338,8 @@ class F5LogSheet(Sheet):
             "dsthost": dsthost,
             "dstport": dstport,
             "monitor_status": m.get("monitorstatus"),
-            "prev_status": m.get("prevstatus"),
             "new_status": m.get("newstatus"),
+            "prev_status": m.get("prevstatus"),
             "last_error": m.get("lasterr"),
             "duration_s": duration,
         }
@@ -363,6 +363,7 @@ class F5LogSheet(Sheet):
             "object": msg.split(" ")[-1],
             "objtype": "pool",
             "new_status": "no members available",
+            "prev_status": None,
         }
 
     @staticmethod
@@ -371,6 +372,7 @@ class F5LogSheet(Sheet):
             "object": msg.split(" ")[1],
             "objtype": "pool",
             "new_status": "now has available members",
+            "prev_status": None,
         }
 
     @staticmethod
@@ -449,13 +451,25 @@ class F5LogSheet(Sheet):
                 "object": m[2],
                 "objtype": "vs",
                 "new_status": m[-1],
+                "prev_status": None,
             }
         else:
             yield {
                 "object": m[1],
                 "objtype": "vs",
                 "new_status": m[-1],
+                "prev_status": None,
             }
+
+    @staticmethod
+    def split_ltm_virtual_address_status(msg):
+        m = msg.split(" ")
+        yield {
+            "object": m[2],
+            "objtype": "virtual address",
+            "new_status": m[9].lower().strip("."),
+            "prev_status": m[7].lower(),
+        }
 
     @staticmethod
     def split_ltm_ssl_handshake_fail(msg):
@@ -605,6 +619,7 @@ class F5LogSheet(Sheet):
         0x01070728: split_ltm_pool_mon_status.__func__,
         0x01071681: split_ltm_virtual_status.__func__,
         0x01071682: split_ltm_virtual_status.__func__,
+        0x010719E7: split_ltm_virtual_address_status.__func__,
         0x01071BA9: split_ltm_virtual_status.__func__,
         0x01190004: split_tmm_address_conflict.__func__,
         0x011A1004: split_gtm_monitor.__func__,
