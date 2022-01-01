@@ -24,30 +24,34 @@ class LineRememberer:
             yield l
 
 
-def replace_msg(msg):
-    ret=msg
+def replace_msg(msg, logrow):
+    ret = msg
     for replacer in gentests_replacers.replacers:
         try:
-            ret = replacer(ret)
+            ret = replacer(ret, logrow)
         except Exception as e:
             print(msg)
             raise e
     return ret
 
+
 def parse_lines(f, logkeys, logs):
     ls = F5LogSheet()
-    # patch the year to be one with a leap year
+    # patch the year to be one with a leap year so Feb 29 doesn't cause issues
     ls._year = 2020
     ls.source = LineRememberer(f)
     try:
         for line in ls.iterload():
             if line.PARSE_ERROR:
-                logs.write(replace_msg(ls.source.last_line))
+                logs.write(replace_msg(ls.source.last_line, line))
                 continue
-            if line.logid1 is None:
-                if line.message.split(" ")[0].split(".")[0].split("[")[0] not in logkeys:
-                    logs.write(replace_msg(ls.source.last_line))
-                    logkeys.add(line.message.split(" ")[0].split(".")[0])
+            if line.logid1 is None and line.message is not None:
+                if (
+                    line.message.split(" ")[0].split(".")[0].split("[")[0].split(":")[0]
+                    not in logkeys
+                ):
+                    logs.write(replace_msg(ls.source.last_line, line))
+                    logkeys.add(line.message.split(" ")[0].split(".")[0].split("[")[0].split(":")[0])
                     continue
             k = (
                 line.logid1,
@@ -70,10 +74,10 @@ def parse_lines(f, logkeys, logs):
                 continue
             print(k)
             logkeys.add(k)
-            logs.write(replace_msg(ls.source.last_line))
+            logs.write(replace_msg(ls.source.last_line, line))
     except Exception as exc:
-        logs.write(replace_msg(ls.source.prev_last_line))
-        logs.write(replace_msg(ls.source.last_line))
+        logs.write(replace_msg(ls.source.prev_last_line, line))
+        logs.write(replace_msg(ls.source.last_line, line))
         print("--- ERROR ---")
         print(
             "\n".join(
@@ -115,3 +119,6 @@ with open(sys.argv[1], "w") as logs:
         logs.flush()
 
 print(f"wrote {len(logkeys)} logs to test file {sys.argv[1]}")
+
+with open(f'{sys.argv[1]}.map', "w") as logmap:
+    gentests_replacers.dump_map(logmap)
