@@ -80,9 +80,9 @@ class F5LogSheet(Sheet):
             }
 
         def __getattr__(self, item):
-            return self._data.get(item)
+            return self._data.get(item, self._data["kv"].get(item) if self._data["kv"] else None)
 
-    # strptime is slow so we we need to parse manually
+    # strptime is slow so we need to parse manually
     _months = {
         "Jan": 1,
         "Feb": 2,
@@ -114,7 +114,7 @@ class F5LogSheet(Sheet):
     ]
 
     re_f5log = re.compile(
-        r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>[a-z0-9_./]+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
+        r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>\S+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
     )
     re_ltm_irule = re.compile(
         r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<srchost>\S+)\s->\s(?P<dsthost>\S+)|.*)"
@@ -126,7 +126,7 @@ class F5LogSheet(Sheet):
         r"(?:.*?)(?P<ip1>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port1>\d+))?(?:(?:\s->\s|:)(?P<ip2>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port2>\d+))?)?(?:\smonitor\sstatus\s(?P<mon_status>\w+)\.\s\[[^]]+\]\s+\[\swas\s(?P<prev_status>\w+)\sfor\s((?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)secs?)\s\]|\.?(?:.*))"
     )
     re_ltm_conn_error = re.compile(
-        r"^Connection\serror:\s(?P<func>[^:]+):(?P<funcloc>[^:]+):\s(?P<error>.*)\s\((?P<errno>\d+)\)$"
+        r"^(?:\(null\sconnflow\):\s)?Connection\serror:\s(?P<func>[^:]+):(?P<funcloc>[^:]+):\s(?P<error>.*)\s?\((?P<errno>\d+)\)(?:\s(?P<errormsg>.*))$"
     )
     re_ltm_cert_expiry = re.compile(
         r"Certificate\s'(?P<cert_cn>.*)'\sin\sfile\s(?P<file>\S+)\s(?P<message>will\sexpire|expired)\son\s(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s\d+\s\S+)"
@@ -283,14 +283,14 @@ class F5LogSheet(Sheet):
             "object": m.get("poolobj"),
             "objtype": "pool",
             "pool_member": m.get("poolmemberobj"),
-            "new_status": m.get("newstatus"),
             "monitor": m.get("monitorobj"),
-            "monitor_status": m.get("monitorstatus"),
-            "last_error": m.get("lasterr"),
-            "prev_status": m.get("prevstatus"),
-            "duration_s": duration,
             "dsthost": dsthost,
             "dstport": dstport,
+            "monitor_status": m.get("monitorstatus"),
+            "prev_status": m.get("prevstatus"),
+            "new_status": m.get("newstatus"),
+            "last_error": m.get("lasterr"),
+            "duration_s": duration,
         }
 
     @staticmethod
@@ -302,7 +302,7 @@ class F5LogSheet(Sheet):
         yield {
             "object": m.get("object"),
             "objtype": "pool",
-            "member": m.get("member"),
+            "pool_member": m.get("member"),
             "monitor_status": m.get("status"),
         }
 
@@ -329,10 +329,10 @@ class F5LogSheet(Sheet):
             return
         m = m.groupdict()
         yield {
-            "irule_msg": m.get("irule_msg"),
             "object": m.get("irule"),
             "objtype": "rule",
             "irule_event": m.get("event"),
+            "irule_msg": m.get("irule_msg"),
             "msg": m.get("message"),
         }
         if m.get("message", "").startswith("aborted for"):
@@ -387,6 +387,7 @@ class F5LogSheet(Sheet):
             "funcloc": m.get("funcloc"),
             "error": m.get("error"),
             "errno": m.get("errno"),
+            "errmsg": m.get("errormsg"),
         }
 
     @staticmethod
@@ -444,23 +445,24 @@ class F5LogSheet(Sheet):
     def split_ltm_rst_reason(msg):
         m = msg.split(" ", maxsplit=7)
         src, dst = m[3].strip(","), m[5].strip(",")
-        reasonc1, reasonc2 = m[6].split(':')
+        reasonc1, reasonc2 = m[6].split(":")
         if len(src.split(":")) == 2:
             # ipv4
             srchost, srcport = src.split(":")
         else:
             # ipv6
-            srchost, srcport = src.rsplit(".", maxsplit=1)
+            srchost, srcport = src.rsplit(":", maxsplit=1)
         if len(dst.split(":")) == 2:
             # ipv4
             dsthost, dstport = dst.split(":")
         else:
+            # ipv6
             dsthost, dstport = dst.rsplit(":", maxsplit=1)
         yield {
             "srchost": ip_address(srchost),
-            "srcport": int(srcport),
+            "srcport": int(srcport) if srcport else None,
             "dsthost": ip_address(dsthost),
-            "dstport": int(dstport),
+            "dstport": int(dstport) if dstport else None,
             "rst_reason_code1": hexint(reasonc1[3:]),
             "rst_reason_code2": hexint(reasonc2[:-1]),
             "rst_reason": m[7],
@@ -492,16 +494,16 @@ class F5LogSheet(Sheet):
             "objtype": m.get("objtype").lower() if m.get("objtype") else None,
             "object": m.get("object"),
             "pool_member": m.get("pool_member"),
+            "monitor_object": m.get("monitor_object"),
             "dsthost": ip_address(dsthost) if dsthost else None,
             "dstport": int(dstport) if dstport else None,
             "server": m.get("server"),
+            "new_status": m.get("new_status").lower() if m.get("new_status") else None,
             "prev_status": m.get("prev_status").lower()
             if m.get("prev_status")
             else None,
-            "new_status": m.get("new_status").lower() if m.get("new_status") else None,
             "msg": m.get("msg"),
             "type": m.get("type").lower() if m.get("type") in m else None,
-            "monitor_object": m.get("monitor_object"),
             "state": m.get("state"),
         }
 
@@ -524,8 +526,8 @@ class F5LogSheet(Sheet):
             "objtype": "monitor",
             "dsthost": ip_address(dsthost) if dsthost else None,
             "dstport": int(dstport) if dstport else None,
-            "prev_status": m.get("prevstatus", "").lower(),
             "new_status": m.get("newstatus", "").lower(),
+            "prev_status": m.get("prevstatus", "").lower(),
             "src_gtm": m.get("srcgtm"),
             "state": m.get("state").lower(),
         }
@@ -535,10 +537,10 @@ class F5LogSheet(Sheet):
         m = msg.split(" ")
         dsthost = m[4]
         yield {
-            "dstmac": m[5].strip("()"),
-            "dsthost": ip_address(dsthost),
-            "object": m[7],
+            "object": " ".join(m[7:]),
             "objtype": "address",
+            "dsthost": ip_address(dsthost),
+            "dstmac": m[5].strip("()"),
         }
 
     splitters = {
