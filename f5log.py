@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.6"
+__version__ = "0.3.7"
 
 from datetime import datetime, timedelta
 from functools import partial
@@ -39,10 +39,10 @@ theme("color_f5log_mon_down", "red", "color of f5log monitor status down")
 theme("color_f5log_mon_unknown", "blue", "color of f5log monitor status unknown")
 theme("color_f5log_mon_checking", "magenta", "color of monitor status checking")
 theme("color_f5log_mon_disabled", "black", "color of monitor status disabled")
-theme(
-    "color_f5log_logid_warning", "red", "color of something urgent to pay attention to"
-)
-theme("color_f5log_logid_notice", "cyan", "color of something to notice")
+theme("color_f5log_logid_alarm", "red", "color of alarms")
+theme("color_f5log_logid_warn", "yellow", "color of warnings")
+theme("color_f5log_logid_notice", "cyan", "color of notice")
+theme("color_f5log_logid_info", "green", "color of info")
 vd.option(
     "f5log_object_regex",
     None,
@@ -153,6 +153,7 @@ class F5LogSheet(Sheet):
         ("monitor_status", "enabled"): "color_f5log_mon_up",
         ("monitor_status", "forced disabled"): "color_f5log_mon_disabled",
         ("monitor_status", "node disabled"): "color_f5log_mon_disabled",
+        ("monitor_status", "checking"): "color_f5log_mon_checking",
         ("new_status", "available"): "color_f5log_mon_up",
         ("new_status", "unavailable"): "color_f5log_mon_down",
         ("new_status", "up"): "color_f5log_mon_up",
@@ -184,7 +185,32 @@ class F5LogSheet(Sheet):
             return None
         return sheet.f5log_mon_colors.get((col.name, value.value), None)
 
-    f5log_warn_logid = {"01190004": "color_f5log_logid_warning"}
+    f5log_warn_logid = {
+        "01140029": "color_f5log_logid_alarm",
+        "01140045": "color_f5log_logid_alarm",
+        "01140030": "color_f5log_logid_warn",
+        "010c0052": "color_f5log_logid_warn",
+        "010c0018": "color_f5log_logid_warn",
+        "010c003e": "color_f5log_logid_alarm",
+        "010c0054": "color_f5log_logid_alarm",
+        "010c0057": "color_f5log_logid_info",
+        "01190004": "color_f5log_logid_alarm",
+        "010e0001": "color_f5log_logid_alarm",
+        "010e0004": "color_f5log_logid_alarm",
+        "011e0002": "color_f5log_logid_alarm",
+        "011e0003": "color_f5log_logid_alarm",
+        "010c0044": "color_f5log_logid_warn",
+        "014f0004": "color_f5log_logid_warn",
+        "010c0055": "color_f5log_logid_alarm",
+        "010c003f": "color_f5log_logid_alarm",
+        "011f0005": "color_f5log_logid_warn",
+        "01010029": "color_f5log_logid_warn",
+        "010c0019": "color_f5log_logid_info",
+        "010c0053": "color_f5log_logid_info",
+        "01340011": "color_f5log_logid_warn",
+        "01390002": "color_f5log_logid_notice",
+        "01010013": "color_f5log_logid_notice",
+    }
 
     def colorizeRows(sheet, col: Column, row: F5LogRow, value):
         if row is None or col is None:
