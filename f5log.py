@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 
 from datetime import datetime, timedelta
 from functools import partial
