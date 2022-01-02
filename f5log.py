@@ -109,7 +109,7 @@ class F5LogSheet(Sheet):
     rowtype = "logs"
 
     columns = [
-        ColumnAttr("rawmsg", type=str),
+        ColumnAttr("rawmsg", type=str, width=0),
         ColumnAttr("timestamp", type=date),
         ColumnAttr("host", type=str),
         ColumnAttr("level", type=str),
