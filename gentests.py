@@ -46,12 +46,18 @@ def parse_lines(f, logkeys, logs):
                 logs.write(replace_msg(ls.source.last_line, line))
                 continue
             if line.logid1 is None and line.message is not None:
-                if (
-                    line.message.split(" ")[0].split(".")[0].split("[")[0].split(":")[0]
-                    not in logkeys
-                ):
+                if len(line.message.split(",")) == 5:
+                    k = line.message.split(",")[5]
+                else:
+                    k = (
+                        line.message.split(" ")[0]
+                        .split(".")[0]
+                        .split("[")[0]
+                        .split(":")[0]
+                    )
+                if k not in logkeys:
                     logs.write(replace_msg(ls.source.last_line, line))
-                    logkeys.add(line.message.split(" ")[0].split(".")[0].split("[")[0].split(":")[0])
+                    logkeys.add(k)
                     continue
             k = (
                 line.logid1,
@@ -120,5 +126,5 @@ with open(sys.argv[1], "w") as logs:
 
 print(f"wrote {len(logkeys)} logs to test file {sys.argv[1]}")
 
-with open(f'{sys.argv[1]}.map', "w") as logmap:
+with open(f"{sys.argv[1]}.map", "w") as logmap:
     gentests_replacers.dump_map(logmap)

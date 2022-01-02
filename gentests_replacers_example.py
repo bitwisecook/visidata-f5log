@@ -221,13 +221,32 @@ def replace_domain(msg, logrow):
 
 
 def replace_network(msg, logrow):
-    if "boot_marker : ---===" in msg:
+    if all([_ in msg for _ in ("---===[ ", " ]===---")]) or logrow.logid1 in (
+            "01010001",
+            "01070711",
+            "0107d000",
+    ):
         return msg
     ret = ""
     prev_end = 0
     for ip_str in _find_ip_addresses.finditer(msg):
+        ipg, port = ip_str.groupdict()["ip"], None
+        if (
+                logrow.logid1
+                in (
+                "01230140",
+                "01070638",
+                "01070727",
+                "01070728",
+                "01071038",
+                "01260026",
+        )
+                or (logrow.message and logrow.message.startswith("mprov"))
+        ):
+            if len(ipg.split(":")) > 2:
+                ipg, port = ipg.rsplit(":", maxsplit=1)
         try:
-            ip = ip_address(ip_str.groupdict()["ip"])
+            ip = ip_address(ipg)
         except ValueError:
             continue
         for net in _nets:
@@ -235,6 +254,8 @@ def replace_network(msg, logrow):
                 new_ip = randip(ip, net)
                 ret += msg[prev_end : ip_str.start()]
                 ret += str(new_ip)
+                if port is not None:
+                    ret += f":{port}"
                 prev_end = ip_str.end()
                 break
     ret += msg[prev_end:]
