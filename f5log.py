@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -140,7 +140,7 @@ class F5LogSheet(Sheet):
         r"Certificate\s'(?P<cert_cn>.*)'\sin\sfile\s(?P<file>\S+)\s(?P<message>will\sexpire|expired)\son\s(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s\d+\s\S+)"
     )
     re_gtm_monitor = re.compile(
-        r"^(?:SNMP_TRAP:\s)?(?P<objtype>VS|Pool|Monitor|Wide\sIP|Server)\s(?P<object>\S+)\s(?:member\s(?P<pool_member>\S+)\s)?(?:\(ip(?::port)?=(?P<ipport>[^\)]+)\)\s)?(?:\(Server\s(?P<server>[^\)]+)\)\s)?(?:state\schange\s)?(?P<prev_status>\w+)\s-->\s(?P<new_status>\w+)(?:(?:\s\(\s?)(?P<msg>(?:(?P<type>\w+)\s(?P<monitor_object>\S+)\s:\s)?state:\s(?P<state>\S+)|.*)\))?"
+        r"^(?:SNMP_TRAP:\s)?(?P<objtype>VS|Pool|Monitor|Wide\sIP|Server|Data\scenter|Prober\sPool|Box)\s(?P<object>\S+)\s(?:member\s(?P<pool_member>\S+)\s)?(?:\(ip(?::port)?=(?P<ipport>[^\)]+)\)\s)?(?:\(Server\s(?P<server>[^\)]+)\)\s)?(?:state\schange\s)?(?P<prev_status>\w+)\s-->\s(?P<new_status>\w+)(?:(?:\s\(\s?)(?P<msg>(?:(?P<type>\w+)\s(?P<monitor_object>\S+)\s:\s)?state:\s(?P<state>\S+)|.*)\))?$"
     )
     re_gtm_monitor_instance = re.compile(
         r"^Monitor\sinstance\s(?P<object>\S+)\s(?P<monip>\S+)\s(?P<prevstatus>\S+)\s-->\s(?P<newstatus>\S+)\sfrom\s(?P<srcgtm>\S+)\s\((?:state:?\s)?(?P<state>.*)\)"
@@ -770,14 +770,22 @@ class F5LogSheet(Sheet):
         0x01190004: split_tmm_address_conflict.__func__,
         0x011A1004: split_gtm_monitor.__func__,
         0x011A1005: split_gtm_monitor.__func__,
+        0x011A1101: split_gtm_monitor.__func__,
+        0x011A1102: split_gtm_monitor.__func__,
         0x011A3003: split_gtm_monitor.__func__,
         0x011A3004: split_gtm_monitor.__func__,
         0x011A4002: split_gtm_monitor.__func__,
         0x011A4003: split_gtm_monitor.__func__,
+        0x011A4101: split_gtm_monitor.__func__,
+        0x011A4102: split_gtm_monitor.__func__,
         0x011A5003: split_gtm_monitor.__func__,
         0x011A5004: split_gtm_monitor.__func__,
+        0x011A500B: split_gtm_monitor.__func__,
+        0x011A500C: split_gtm_monitor.__func__,
         0x011A6005: split_gtm_monitor.__func__,
         0x011A6006: split_gtm_monitor.__func__,
+        0x011AB003: split_gtm_monitor.__func__,
+        0x011AB004: split_gtm_monitor.__func__,
         0x011AE0F2: split_gtm_monitor_instance.__func__,
         # 0x01220000: split_ltm_rule.__func__,
         0x011E0002: split_ltm_sweeper_active2.__func__,
