@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -113,12 +113,12 @@ class F5LogSheet(Sheet):
         ColumnAttr("timestamp", type=date),
         ColumnAttr("host", type=str),
         ColumnAttr("level", type=str),
-        ColumnAttr("process", type=str),
-        ColumnAttr("proc_pid", type=int),
+        ColumnAttr("process", type=str, width=10),
+        ColumnAttr("proc_pid", type=int, width=7),
         ColumnAttr("logid1", type=hexint),
         ColumnAttr("logid2", type=hexint),
-        ColumnAttr("message", type=str),
-        ColumnAttr("object", type=str),
+        ColumnAttr("message", type=str, width=90),
+        ColumnAttr("object", type=str, width=50),
     ]
 
     re_f5log = re.compile(
@@ -128,10 +128,10 @@ class F5LogSheet(Sheet):
         r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<srchost>\S+)\s->\s(?P<dsthost>\S+)|.*)"
     )
     re_ltm_pool_mon_status_msg = re.compile(
-        r"^(Pool|Node)\s(?P<poolobj>\S+)\s(member|address)\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>.+)\.\s\[\s(?:(?:(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?)?(?:,\s)?)+\s]\s+\[\swas\s(?P<prevstatus>.+)\sfor\s(?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)sec\s\]$"
+        r"^(Pool|Node)\s(?P<poolobj>\S+)\s(member|address)\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>.+)\.\s\[\s(?:(?:(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?)?(?:,\s)?)+\s](?:\s+\[\swas\s(?P<prevstatus>.+)\sfor\s(?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)sec\s\])?$$"
     )
     re_ltm_ip_msg = re.compile(
-        r"(?:.*?)(?P<ip1>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port1>\d+))?(?:(?:\s->\s|:)(?P<ip2>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port2>\d+))?)?(?:\smonitor\sstatus\s(?P<mon_status>\w+)\.\s\[[^]]+\]\s+\[\swas\s(?P<prev_status>\w+)\sfor\s((?P<durationhr>\d+)hrs?:(?P<durationmin>\d+)mins?:(?P<durationsec>\d+)secs?)\s\]|\.?(?:.*))"
+        r"(?:.*?)(?P<ip1>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port1>\d+))?(?:(?:\s->\s|:)(?P<ip2>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port2>\d+))?)?(?:\smonitor\sstatus\s(?P<mon_status>\w+)\.\s\[[^]]+\]\s+\[\swas\s(?P<prev_status>\w+)\sfor\s((?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)secs?)\s\]|\.?(?:.*))"
     )
     re_ltm_conn_error = re.compile(
         r"^(?:\(null\sconnflow\):\s)?Connection\serror:\s(?P<func>[^:]+):(?P<funcloc>[^:]+):\s(?P<error>.*)\s?\((?P<errno>\d+)\)(?:\s(?P<errormsg>.*))$"
@@ -150,6 +150,9 @@ class F5LogSheet(Sheet):
     )
     re_ltm_no_shared_ciphers = re.compile(
         r"^(?P<msg>No\sshared\sciphers\sbetween\sSSL\speers)\s(?P<srchost>\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)\.(?P<srcport>\d+)\:(?P<dsthost>\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)\.(?P<dstport>\d+)\.$"
+    )
+    re_ltm_http_process_state = re.compile(
+        r"^http_process_state_(?P<httpstate>\S+)\s-\sInvalid\saction:0x(?P<actionid>[a-f0-9]+)\s(?P<msg>.*?)\s*(?P<sidea>\S+)\s\((?P<src>\S+)\s->\s(?P<vsdst>\S+)\)\s+(?:(?P<sideb>.+)\s\((?P<poolsrc>\S+)\s->\s(?P<dst>\S+)\)|\(\(null\sconnflow\)\))\s\((?P<sideaa>\S+)\sside:\svip=(?P<vs>\S+)\sprofile=(?P<profile>\S+)\spool=(?P<pool>\S+)\s(?P<sideaaa>\S+)_ip=(?P<sideasrc>\S+)\)$"
     )
 
     f5log_mon_colors = {
@@ -220,6 +223,7 @@ class F5LogSheet(Sheet):
         "01070333": "color_f5log_logid_warn",
         "01010201": "color_f5log_logid_warn",
         "01010281": "color_f5log_logid_warn",
+        "01010038": "color_f5log_logid_warn",
     }
 
     def colorizeRows(sheet, col: Column, row: F5LogRow, value):
@@ -422,15 +426,25 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_ltm_rule_missing_datagroup(msg):
-        m = msg.split(" ", maxsplit=12)
-        yield {
-            "object": m[1].strip("[").strip("]"),
-            "objtype": "rule",
-            "msg": "error: Unable to find value_list",
-            "missing_dg": m[7].strip("("),
-            "funcloc": int(m[11].strip(":")),
-            "error": m[12],
-        }
+        if "error: Unable to find value_list"  in msg:
+            m = msg.split(" ", maxsplit=12)
+            yield {
+                "object": m[1].strip("[").strip("]"),
+                "objtype": "rule",
+                "msg": "error: Unable to find value_list",
+                "missing_dg": m[7].strip("("),
+                "funcloc": int(m[11].strip(":")),
+                "error": m[12],
+            }
+        else:
+            m = msg.split(" ", maxsplit=5)
+            yield {
+                "object": m[1].strip("[").strip("]"),
+                "objtype": "rule",
+                "msg": m[5].split("]", maxsplit=1)[0].strip("[]"),
+                "error": m[5].split("]", maxsplit=1)[1],
+                "funcloc": int(m[3].split(":")[1]),
+            }
 
     @staticmethod
     def split_ltm_cert_expiry(msg):
@@ -598,6 +612,24 @@ class F5LogSheet(Sheet):
         }
 
     @staticmethod
+    def split_ltm_syncookie_threshold(msg):
+        # Syncookie threshold 1993 exceeded, virtual = 203.24.253.132:443
+        m = msg.split(" ")
+        dst = m[-1]
+        if len(dst.split(":")) == 2:
+            dsthost, dstport = dst.split(":")
+        else:
+            # ipv6
+            dsthost, dstport = dst.rsplit(".", maxsplit=1)
+        yield {
+            "msg": "Syncookie threshold exceeded",
+            "threshold": int(m[2]),
+            "objtype": m[-3].lower(),
+            "dsthost": ip_address(dsthost),
+            "dstport": int(dstport),
+        }
+
+    @staticmethod
     def split_ltm_sweeper_active2(msg):
         m = msg.split(" ")
         yield {
@@ -672,6 +704,70 @@ class F5LogSheet(Sheet):
         }
 
     @staticmethod
+    def split_ltm_http_process_state(msg):
+        m = F5LogSheet.re_ltm_http_process_state.match(msg)
+        if not m:
+            return
+        m = m.groupdict()
+        src, vsdst, backendsrc, dst = (
+            m.get("src"),
+            m.get("vsdst"),
+            m.get("poolsrc"),
+            m.get("dst"),
+        )
+        if src:
+            if len(src.split(":")) == 2:
+                srchost, srcport = src.split(":")
+            else:
+                # ipv6
+                srchost, srcport = src.rsplit(".", maxsplit=1)
+        else:
+            srchost, srcport = None, None
+        if dst:
+            if len(dst.split(":")) == 2:
+                dsthost, dstport = dst.split(":")
+            else:
+                # ipv6
+                dsthost, dstport = dst.rsplit(".", maxsplit=1)
+        else:
+            dsthost, dstport = None, None
+        if vsdst:
+            if len(vsdst.split(":")) == 2:
+                vsdsthost, vsdstport = vsdst.split(":")
+            else:
+                # ipv6
+                vsdsthost, vsdstport = vsdst.rsplit(".", maxsplit=1)
+        else:
+            vsdsthost, vsdstport = None, None
+        if backendsrc:
+            if len(backendsrc.split(":")) == 2:
+                backendsrchost, backendsrcport = backendsrc.split(":")
+            else:
+                # ipv6
+                backendsrchost, backendsrcport = backendsrc.rsplit(".", maxsplit=1)
+        else:
+            backendsrchost, backendsrcport = None, None
+        yield {
+            "msg": m.get("msg"),
+            "httpstate": m.get("httpstate"),
+            "actionid": hexint(m.get("actionid")),
+            "sidea": m.get("sidea"),
+            "srchost": ip_address(srchost) if srchost else None,
+            "srcport": int(srcport) if srcport else None,
+            "dsthost": ip_address(dsthost) if dsthost else None,
+            "dstport": int(dstport) if dstport else None,
+            "vsdsthost": ip_address(vsdsthost) if vsdsthost else None,
+            "vsdstport": int(vsdstport) if vsdstport else None,
+            "backendsrchost": ip_address(backendsrchost) if backendsrchost else None,
+            "backendsrcport": int(backendsrcport) if backendsrcport else None,
+            "sideb": m.get("sideb"),
+            "object": m.get("vs"),
+            "profile": m.get("profile"),
+            "pool": m.get("pool"),
+            "sideasrc": ip_address(m.get("sideasrc")) if m.get("sideasrc") else None,
+        }
+
+    @staticmethod
     def split_gtm_monitor(msg):
         m = F5LogSheet.re_gtm_monitor.match(msg)
         if m is None:
@@ -736,6 +832,15 @@ class F5LogSheet(Sheet):
         }
 
     @staticmethod
+    def split_gtm_changed_state(msg):
+        m = msg.split(" ")
+        yield {
+            "msg": f"{m[0]} changed state",
+            "new_status": m[6].lower().strip("."),
+            "prev_status": m[4].lower(),
+        }
+
+    @staticmethod
     def split_tmm_address_conflict(msg):
         m = msg.split(" ")
         dsthost = m[4]
@@ -748,6 +853,7 @@ class F5LogSheet(Sheet):
 
     splitters = {
         0x01010028: split_ltm_pool_has_no_avail_mem.__func__,
+        0x01010038: split_ltm_syncookie_threshold.__func__,
         0x01010201: split_ltm_inet_port_exhaust.__func__,
         0x01010281: split_ltm_inet_port_exhaust.__func__,
         0x01010221: split_ltm_pool_has_avail_mem.__func__,
@@ -766,6 +872,7 @@ class F5LogSheet(Sheet):
         0x01071913: split_ltm_virtual_address_status.__func__,
         0x010719E7: split_ltm_virtual_address_status.__func__,
         0x010719E8: split_ltm_virtual_address_status.__func__,
+        0x010719EA: split_gtm_changed_state.__func__,
         0x01071BA9: split_ltm_virtual_status.__func__,
         0x01190004: split_tmm_address_conflict.__func__,
         0x011A1004: split_gtm_monitor.__func__,
@@ -790,6 +897,8 @@ class F5LogSheet(Sheet):
         # 0x01220000: split_ltm_rule.__func__,
         0x011E0002: split_ltm_sweeper_active2.__func__,
         0x011E0003: split_ltm_sweeper_active3.__func__,
+        0x011F0007: split_ltm_http_process_state.__func__,
+        0x011F0016: split_ltm_http_process_state.__func__,
         0x01220001: split_ltm_rule.__func__,
         0x01220002: split_ltm_rule.__func__,
         # 0x01220003: split_ltm_rule.__func__,
