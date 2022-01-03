@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -278,7 +278,7 @@ class F5LogSheet(Sheet):
             status = msg[status_loc + 1 : -1]
             msg = msg[: status_loc - 1]
             yield {
-                status.split("=", maxsplit=1)[0]: status.split("=", maxsplit=1)[1],
+                "status": status.split("=", maxsplit=1)[1],
             }
         # we need to get one word back from the first opening curly
         # find the curly
@@ -293,6 +293,7 @@ class F5LogSheet(Sheet):
             yield {
                 "command": cmd,
                 "cmd_data": cmd_data,
+                "object": cmd_data.split('"', maxsplit=2)[1],
             }
 
         e = msg.split(" - ")
@@ -313,6 +314,8 @@ class F5LogSheet(Sheet):
             if ee[0] == "transaction":
                 yield {"transaction": int(ee[1][1:].split("-")[0])}
                 yield {"transaction_step": int(ee[1][1:].split("-")[1])}
+            elif ee[0] == "object":
+                yield {"object_id": ee[1]}
             else:
                 # yield the rest of the kvs
                 try:
@@ -894,6 +897,7 @@ class F5LogSheet(Sheet):
         0x01010281: split_ltm_inet_port_exhaust.__func__,
         0x01010221: split_ltm_pool_has_avail_mem.__func__,
         0x01070151: split_ltm_rule_missing_datagroup.__func__,
+        0x01070417: split_audit_mcpd_mcp_error.__func__,
         0x01070639: split_ltm_poolnode_mon_abled.__func__,
         0x01070641: split_ltm_poolnode_mon_abled.__func__,
         0x01070807: split_ltm_poolnode_mon_abled.__func__,
@@ -998,12 +1002,14 @@ class F5LogSheet(Sheet):
         super().__init__(*args, **kwargs)
         # the default F5 logs don't have the year so we have to guess from the file ctime
         # TODO: make this overridable
-        self._log_tz=pytz.UTC
+        self._log_tz = pytz.UTC
         try:
-            self._year = int(vd.options.get(
-                "f5log_log_year",
-                datetime.utcfromtimestamp(self.source.stat().st_ctime).year,
-            ))
+            self._year = int(
+                vd.options.get(
+                    "f5log_log_year",
+                    datetime.utcfromtimestamp(self.source.stat().st_ctime).year,
+                )
+            )
         except (AttributeError, ValueError, TypeError):
             self._year = datetime.now().year
 
