@@ -1,3 +1,4 @@
+from collections import namedtuple
 from ipaddress import ip_network, ip_address, IPv4Address, IPv6Address
 import random
 import re
@@ -17,55 +18,205 @@ _find_certcn = re.compile(
     r"Certificate\s'(?P<cn>[^']+)'\sin\sfile\s/.*/(?P<certfn>(?P<profname>\S+)\.crt)\s"
 )
 
+NetMap = namedtuple("NetMap", ("orig_net", "map_net", "keep_ips"))
+
 _nets = [
-    (ip_network("10.0.0.0/8"), ip_network("10.0.0.0/8")),
-    (ip_network("100.64.0.0/10"), ip_network("100.64.0.0/10")),
-    (ip_network("127.0.0.1/32"), ip_network("127.0.0.1/32")),
-    (ip_network("127.0.0.2/32"), ip_network("127.0.0.2/32")),
-    (ip_network("127.0.0.0/8"), ip_network("127.0.0.0/8")),
-    (ip_network("169.254.0.0/16"), ip_network("169.254.0.0/16")),
-    (ip_network("172.16.0.0/12"), ip_network("172.16.0.0/12")),
-    (ip_network("192.0.0.0/24"), ip_network("192.0.0.0/24")),
-    (ip_network("192.0.2.0/24"), ip_network("192.0.2.0/24")),
-    (ip_network("192.88.99.0/24"), ip_network("192.88.99.0/24")),
-    (ip_network("192.168.0.0/16"), ip_network("192.168.0.0/16")),
-    (ip_network("198.18.0.0/15"), ip_network("198.18.0.0/15")),
-    (ip_network("198.51.100.0/24"), ip_network("198.51.100.0/24")),
-    (ip_network("203.0.113.0/24"), ip_network("203.0.113.0/24")),
-    (ip_network("224.0.0.0/4"), ip_network("224.0.0.0/4")),
-    (ip_network("233.252.0.0/24"), ip_network("233.252.0.0/24")),
-    (ip_network("240.0.0.0/4"), ip_network("240.0.0.0/4")),
-    (ip_network("255.255.255.255/32"), ip_network("255.255.255.255/32")),
-    (ip_network("::/128"), ip_network("::/128")),
-    (ip_network("::1/128"), ip_network("::1/128")),
-    (ip_network("::ffff:0:0/96"), ip_network("::ffff:0:0/96")),
-    (ip_network("::ffff:0:0:0/96"), ip_network("::ffff:0:0:0/96")),
-    (ip_network("64:ff9b::/96"), ip_network("64:ff9b::/96")),
-    (ip_network("64:ff9b:1::/48"), ip_network("64:ff9b:1::/48")),
-    (ip_network("100::/64"), ip_network("100::/64")),
-    (ip_network("2001:0000::/32"), ip_network("2001:0000::/32")),
-    (ip_network("2001:20::/28"), ip_network("2001:20::/28")),
-    (ip_network("2001:db8::/32"), ip_network("2001:db8::/32")),
-    (ip_network("2002::/16"), ip_network("2002::/16")),
-    (ip_network("fc00::/7"), ip_network("fc00::/7")),
-    (ip_network("fe80::/10"), ip_network("fe80::/10")),
-    (ip_network("ff00::/8"), ip_network("ff00::/8")),
-    (ip_network("::/120"), ip_network("::/120")),
-    (ip_network("::/112"), ip_network("::/112")),
+    NetMap(
+        ip_network("10.0.0.0/8"),
+        ip_network("10.0.0.0/8"),
+        True,
+    ),
+    NetMap(
+        ip_network("100.64.0.0/10"),
+        ip_network("100.64.0.0/10"),
+        True,
+    ),
+    NetMap(
+        ip_network("127.0.0.0/8"),
+        ip_network("127.0.0.0/8"),
+        False,
+    ),
+    NetMap(
+        ip_network("169.254.0.0/16"),
+        ip_network("169.254.0.0/16"),
+        True,
+    ),
+    NetMap(
+        ip_network("172.16.0.0/12"),
+        ip_network("172.16.0.0/12"),
+        True,
+    ),
+    NetMap(
+        ip_network("192.0.0.0/24"),
+        ip_network("192.0.0.0/24"),
+        True,
+    ),
+    NetMap(
+        ip_network("192.0.2.0/24"),
+        ip_network("192.0.2.0/24"),
+        True,
+    ),
+    NetMap(
+        ip_network("192.88.99.0/24"),
+        ip_network("192.88.99.0/24"),
+        True,
+    ),
+    NetMap(
+        ip_network("192.168.0.0/16"),
+        ip_network("192.168.0.0/16"),
+        True,
+    ),
+    NetMap(
+        ip_network("198.18.0.0/15"),
+        ip_network("198.18.0.0/15"),
+        True,
+    ),
+    NetMap(
+        ip_network("198.51.100.0/24"),
+        ip_network("198.51.100.0/24"),
+        True,
+    ),
+    NetMap(
+        ip_network("203.0.113.0/24"),
+        ip_network("203.0.113.0/24"),
+        True,
+    ),
+    NetMap(
+        ip_network("224.0.0.0/4"),
+        ip_network("224.0.0.0/4"),
+        True,
+    ),
+    NetMap(
+        ip_network("233.252.0.0/24"),
+        ip_network("233.252.0.0/24"),
+        True,
+    ),
+    NetMap(
+        ip_network("240.0.0.0/4"),
+        ip_network("240.0.0.0/4"),
+        True,
+    ),
+    NetMap(
+        ip_network("255.255.255.255/32"),
+        ip_network("255.255.255.255/32"),
+        True,
+    ),
+    NetMap(
+        ip_network("::/128"),
+        ip_network("::/128"),
+        False,
+    ),
+    NetMap(
+        ip_network("::1/128"),
+        ip_network("::1/128"),
+        True,
+    ),
+    NetMap(
+        ip_network("::/112"),
+        ip_network("::/112"),
+        False,
+    ),
+    NetMap(
+        ip_network("::ffff:0:0/96"),
+        ip_network("::ffff:0:0/96"),
+        True,
+    ),
+    NetMap(
+        ip_network("::ffff:0:0:0/96"),
+        ip_network("::ffff:0:0:0/96"),
+        True,
+    ),
+    NetMap(
+        ip_network("64:ff9b::/96"),
+        ip_network("64:ff9b::/96"),
+        True,
+    ),
+    NetMap(
+        ip_network("64:ff9b:1::/48"),
+        ip_network("64:ff9b:1::/48"),
+        True,
+    ),
+    NetMap(
+        ip_network("100::/64"),
+        ip_network("100::/64"),
+        True,
+    ),
+    NetMap(
+        ip_network("2001:0000::/32"),
+        ip_network("2001:0000::/32"),
+        True,
+    ),
+    NetMap(
+        ip_network("2001:20::/28"),
+        ip_network("2001:20::/28"),
+        True,
+    ),
+    NetMap(
+        ip_network("2001:db8::/32"),
+        ip_network("2001:db8::/32"),
+        True,
+    ),
+    NetMap(
+        ip_network("2002::/16"),
+        ip_network("2002::/16"),
+        True,
+    ),
+    NetMap(
+        ip_network("fc00::/7"),
+        ip_network("fc00::/7"),
+        True,
+    ),
+    NetMap(
+        ip_network("fe80::/10"),
+        ip_network("fe80::/10"),
+        True,
+    ),
+    NetMap(
+        ip_network("ff00::/8"),
+        ip_network("ff00::/8"),
+        True,
+    ),
+    NetMap(
+        ip_network("107.162.0.0/16"),
+        ip_network("203.24.0.0/16"),
+        True,
+    ),
+    NetMap(
+        ip_network("2604:e180:82::/48"),
+        ip_network("11f:32a0:17::/48"),
+        True,
+    ),
+    NetMap(
+        ip_network("2604:e180:83::/48"),
+        ip_network("11f:32a0:37ab::/48"),
+        True,
+    ),
+    NetMap(
+        ip_network("2604:e180::/32"),
+        ip_network("11f:32a0::/32"),
+        True,
+    ),
 ]
 
-for n in range(0, 230):
+# for ip overwriting we find by list order
+# so the specific ones above take precedence
+for n in range(0, 255):
     _nets.append(
-        (ip_network(f"{n}.0.0.0/8"), ip_network(f"{random.randrange(1,230)}.0.0.0/8"))
+        NetMap(
+            ip_network(f"{n}.0.0.0/8"),
+            ip_network(f"{random.randrange(1,230)}.0.0.0/8"),
+            False,
+        )
     )
 
 for n in range(0, 0xFF):
     _nets.append(
-        (
+        NetMap(
             ip_network(f"{n:x}00::/8"),
             ip_network(
                 f"{random.randrange(0,255):x}{random.randrange(0,255):x}:{random.randrange(0,255):x}{random.randrange(0,255):x}::/32"
             ),
+            False,
         )
     )
 
@@ -148,15 +299,15 @@ def randcertfn(cn, profname):
 def randipv4(ip, net):
     global _rand_ipv4
     if ip not in _rand_ipv4:
-        if net[1].num_addresses > 2:
-            offset = random.randrange(1, net[1].num_addresses - 2)
+        if not net.keep_ips and net.map_net.num_addresses > 2:
+            offset = random.randrange(1, net.map_net.num_addresses - 2)
         else:
             offset = 0
         _rand_ipv4[ip] = str(
             IPv4Address(
                 int(ip)
-                - int(net[0].network_address)
-                + int(net[1].network_address)
+                - int(net.orig_net.network_address)
+                + int(net.map_net.network_address)
                 + offset
             )
         )
@@ -166,15 +317,15 @@ def randipv4(ip, net):
 def randipv6(ip, net):
     global _rand_ipv6
     if ip not in _rand_ipv6:
-        if net[1].num_addresses > 2:
-            offset = random.randrange(1, net[1].num_addresses - 2)
+        if not net.keep_ips and net.map_net.num_addresses > 2:
+            offset = random.randrange(1, net.map_net.num_addresses - 2)
         else:
             offset = 0
         _rand_ipv6[ip] = str(
             IPv6Address(
                 int(ip)
-                - int(net[0].network_address)
-                + int(net[1].network_address)
+                - int(net.orig_net.network_address)
+                + int(net.map_net.network_address)
                 + offset
             )
         )
@@ -222,26 +373,36 @@ def replace_domain(msg, logrow):
 
 def replace_network(msg, logrow):
     if all([_ in msg for _ in ("---===[ ", " ]===---")]) or logrow.logid1 in (
-            "01010001",
-            "01070711",
-            "0107d000",
+        "01010001",
+        "01070711",
+        "0107d000",
+        "012b0000",
+        "012b0021",
     ):
         return msg
     ret = ""
     prev_end = 0
     for ip_str in _find_ip_addresses.finditer(msg):
         ipg, port = ip_str.groupdict()["ip"], None
+        if logrow.logid1 in ("01070151", "01220001", "010716ac") and ipg in (
+            "0::",
+            "::",
+        ):
+            continue
+        # ipv6 with colon based port, why oh why would you be such a lazy prat
+        # when forming these log messages?
         if (
-                logrow.logid1
-                in (
+            logrow.logid1
+            in (
                 "01230140",
                 "01070638",
                 "01070727",
                 "01070728",
                 "01071038",
                 "01260026",
-        )
-                or (logrow.message and logrow.message.startswith("mprov"))
+                "011ae0f2",
+            )
+            or (logrow.message and logrow.message.startswith("mprov"))
         ):
             if len(ipg.split(":")) > 2:
                 ipg, port = ipg.rsplit(":", maxsplit=1)
