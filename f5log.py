@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -290,10 +290,12 @@ class F5LogSheet(Sheet):
             msg, cmd = msg[:cmd_data_loc].rsplit(" ", maxsplit=1)
             # strip off the trailling " -" from the message
             msg = msg[:-2]
+            object = cmd_data.split('"', maxsplit=2)
+            if len(object) == 3:
+                yield {"object": object[1]}
             yield {
                 "command": cmd,
                 "cmd_data": cmd_data,
-                "object": cmd_data.split('"', maxsplit=2)[1],
             }
 
         e = msg.split(" - ")
@@ -515,14 +517,25 @@ class F5LogSheet(Sheet):
             }
 
     @staticmethod
-    def split_ltm_virtual_address_status(msg):
+    def split_ltm_virtual_address_status_or_irule_profile_err(msg):
+        # big-ip has a conflict on this logid
         m = msg.split(" ")
-        yield {
-            "object": m[2],
-            "objtype": "virtual address",
-            "new_status": m[9].lower().strip("."),
-            "prev_status": m[7].lower(),
-        }
+        if "event in rule" in msg:
+            yield {
+                "object": m[4].strip("()"),
+                "objtype": "rule",
+                "irule_event": m[0],
+                "msg": f"event in rule {' '.join(m[5:-2])}",
+                "target_obj": m[-1].strip("()."),
+                "target_objtype": m[-2].replace("virtual-server", "vs"),
+            }
+        else:
+            yield {
+                "object": m[2],
+                "objtype": "virtual address",
+                "new_status": m[9].lower().strip("."),
+                "prev_status": m[7].lower(),
+            }
 
     @staticmethod
     def split_ltm_ssl_handshake_fail(msg):
@@ -908,10 +921,10 @@ class F5LogSheet(Sheet):
         0x01070640: split_ltm_pool_mon_status.__func__,
         0x01071681: split_ltm_virtual_status.__func__,
         0x01071682: split_ltm_virtual_status.__func__,
-        0x01071912: split_ltm_virtual_address_status.__func__,
-        0x01071913: split_ltm_virtual_address_status.__func__,
-        0x010719E7: split_ltm_virtual_address_status.__func__,
-        0x010719E8: split_ltm_virtual_address_status.__func__,
+        0x01071912: split_ltm_virtual_address_status_or_irule_profile_err.__func__,
+        0x01071913: split_ltm_virtual_address_status_or_irule_profile_err.__func__,
+        0x010719E7: split_ltm_virtual_address_status_or_irule_profile_err.__func__,
+        0x010719E8: split_ltm_virtual_address_status_or_irule_profile_err.__func__,
         0x010719EA: split_gtm_changed_state.__func__,
         0x01071BA9: split_ltm_virtual_status.__func__,
         0x01190004: split_tmm_address_conflict.__func__,
