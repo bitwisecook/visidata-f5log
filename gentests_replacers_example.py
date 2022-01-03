@@ -423,7 +423,7 @@ def replace_network(msg, logrow):
     return ret
 
 
-# here we
+# here we list out the replacers to execute and what order to run them in
 replacers = [
     replace_hostnames,
     replace_certcn,
