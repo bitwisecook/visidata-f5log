@@ -1,9 +1,10 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
+import pytz
 import re
 import traceback
 from typing import Any, Dict, Optional
@@ -46,6 +47,16 @@ vd.option(
     "f5log_object_regex",
     None,
     "A regex to perform on the object name, useful where object names have a structure to extract. Use the (?P<foo>...) named groups form to get column names.",
+)
+vd.option(
+    "f5log_log_year",
+    None,
+    "Override the default year used for log parsing. Use all four digits of the year (e.g., 2022). By default (None) use the year from the ctime of the file, or failing that the current year.",
+)
+vd.option(
+    "f5log_log_timezone",
+    "UTC",
+    "The timezone the source file is in, by default UTC.",
 )
 
 
@@ -128,7 +139,7 @@ class F5LogSheet(Sheet):
         r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<srchost>\S+)\s->\s(?P<dsthost>\S+)|.*)"
     )
     re_ltm_pool_mon_status_msg = re.compile(
-        r"^(Pool|Node)\s(?P<poolobj>\S+)\s(member|address)\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>.+)\.\s\[\s(?:(?:(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?)?(?:,\s)?)+\s](?:\s+\[\swas\s(?P<prevstatus>.+)\sfor\s(?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)sec\s\])?$$"
+        r"^(Pool|Node)\s(?P<poolobj>\S+)\s(member|address)\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>.+)\.\s\[\s(?:(?:(?:(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?)?(?:,\s)?)+)?\s]\s*(?:\[\swas\s(?P<prevstatus>.+)\sfor\s(?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)sec\s\])?$"
     )
     re_ltm_ip_msg = re.compile(
         r"(?:.*?)(?P<ip1>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port1>\d+))?(?:(?:\s->\s|:)(?P<ip2>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port2>\d+))?)?(?:\smonitor\sstatus\s(?P<mon_status>\w+)\.\s\[[^]]+\]\s+\[\swas\s(?P<prev_status>\w+)\sfor\s((?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)secs?)\s\]|\.?(?:.*))"
@@ -143,7 +154,7 @@ class F5LogSheet(Sheet):
         r"^(?:SNMP_TRAP:\s)?(?P<objtype>VS|Pool|Monitor|Wide\sIP|Server|Data\scenter|Prober\sPool|Box)\s(?P<object>\S+)\s(?:member\s(?P<pool_member>\S+)\s)?(?:\(ip(?::port)?=(?P<ipport>[^\)]+)\)\s)?(?:\(Server\s(?P<server>[^\)]+)\)\s)?(?:state\schange\s)?(?P<prev_status>\w+)\s-->\s(?P<new_status>\w+)(?:(?:\s\(\s?)(?P<msg>(?:(?P<type>\w+)\s(?P<monitor_object>\S+)\s:\s)?state:\s(?P<state>\S+)|.*)\))?$"
     )
     re_gtm_monitor_instance = re.compile(
-        r"^Monitor\sinstance\s(?P<object>\S+)\s(?P<monip>\S+)\s(?P<prevstatus>\S+)\s-->\s(?P<newstatus>\S+)\sfrom\s(?P<srcgtm>\S+)\s\((?:state:?\s)?(?P<state>.*)\)"
+        r"^Monitor\sinstance\s(?P<object>\S+)\s(?P<monip>\S+)\s(?P<prevstatus>\S+)\s-->\s(?P<newstatus>\S+)\sfrom\s(?P<srcgtm>\S+)\s\((?:state:?\s)?(?P<state>.*)\)$"
     )
     re_ltm_poolnode_abled = re.compile(
         r"^(?P<objtype>Pool|Node|Monitor)\s(?P<object>\S+)\s(?:address|member|instance)\s(?P<member>\S+)\s(session\sstatus|has\sbeen)\s(?P<status>.+)\.$"
@@ -153,6 +164,9 @@ class F5LogSheet(Sheet):
     )
     re_ltm_http_process_state = re.compile(
         r"^http_process_state_(?P<httpstate>\S+)\s-\sInvalid\saction:0x(?P<actionid>[a-f0-9]+)\s(?P<msg>.*?)\s*(?P<sidea>\S+)\s\((?P<src>\S+)\s->\s(?P<vsdst>\S+)\)\s+(?:(?P<sideb>.+)\s\((?P<poolsrc>\S+)\s->\s(?P<dst>\S+)\)|\(\(null\sconnflow\)\))\s\((?P<sideaa>\S+)\sside:\svip=(?P<vs>\S+)\sprofile=(?P<profile>\S+)\spool=(?P<pool>\S+)\s(?P<sideaaa>\S+)_ip=(?P<sideasrc>\S+)\)$"
+    )
+    re_ltm_http_header_exceeded = re.compile(
+        r"^(?P<msg>HTTP\sheader\s(?:count|\((?P<size>\d+)\))\sexceeded\smaximum\sallowed\s(?P<type>count|size)\sof\s(?P<limit>\d+))\s\((?P<side>\S+)\sside:\svip=(?P<object>\S+)\sprofile=(?P<profile>\S+)\spool=(?P<pool>\S+)\s(?P<sideip>client|server)_ip=(?P<sidehost>.*)\)$"
     )
 
     f5log_mon_colors = {
@@ -426,7 +440,7 @@ class F5LogSheet(Sheet):
 
     @staticmethod
     def split_ltm_rule_missing_datagroup(msg):
-        if "error: Unable to find value_list"  in msg:
+        if "error: Unable to find value_list" in msg:
             m = msg.split(" ", maxsplit=12)
             yield {
                 "object": m[1].strip("[").strip("]"),
@@ -748,23 +762,45 @@ class F5LogSheet(Sheet):
         else:
             backendsrchost, backendsrcport = None, None
         yield {
+            "object": m.get("vs"),
             "msg": m.get("msg"),
-            "httpstate": m.get("httpstate"),
-            "actionid": hexint(m.get("actionid")),
-            "sidea": m.get("sidea"),
             "srchost": ip_address(srchost) if srchost else None,
             "srcport": int(srcport) if srcport else None,
             "dsthost": ip_address(dsthost) if dsthost else None,
             "dstport": int(dstport) if dstport else None,
+            "pool": m.get("pool"),
+            "profile": m.get("profile"),
+            "httpstate": m.get("httpstate"),
+            "actionid": hexint(m.get("actionid")),
+            "sidea": m.get("sidea"),
             "vsdsthost": ip_address(vsdsthost) if vsdsthost else None,
             "vsdstport": int(vsdstport) if vsdstport else None,
             "backendsrchost": ip_address(backendsrchost) if backendsrchost else None,
             "backendsrcport": int(backendsrcport) if backendsrcport else None,
             "sideb": m.get("sideb"),
-            "object": m.get("vs"),
-            "profile": m.get("profile"),
-            "pool": m.get("pool"),
             "sideasrc": ip_address(m.get("sideasrc")) if m.get("sideasrc") else None,
+        }
+
+    @staticmethod
+    def split_ltm_http_header_exceeded(msg):
+        m = F5LogSheet.re_ltm_http_header_exceeded.match(msg)
+        if not m:
+            return
+        m = m.groupdict()
+        host = m.get("sidehost")
+        yield {
+            "object": m.get("object"),
+            "msg": m.get("msg"),
+            "srchost": ip_address(host)
+            if host and m.get("sideip") == "client"
+            else None,
+            "dsthost": ip_address(host)
+            if host and m.get("sideip") == "server"
+            else None,
+            "pool": m.get("pool"),
+            "profile": m.get("profile"),
+            "size": int(m.get("size")) if m.get("size") else None,
+            "limit": int(m.get("limit")) if m.get("limit") else None,
         }
 
     @staticmethod
@@ -897,6 +933,8 @@ class F5LogSheet(Sheet):
         # 0x01220000: split_ltm_rule.__func__,
         0x011E0002: split_ltm_sweeper_active2.__func__,
         0x011E0003: split_ltm_sweeper_active3.__func__,
+        0x011F0005: split_ltm_http_header_exceeded.__func__,
+        0x011F0011: split_ltm_http_header_exceeded.__func__,
         0x011F0007: split_ltm_http_process_state.__func__,
         0x011F0016: split_ltm_http_process_state.__func__,
         0x01220001: split_ltm_rule.__func__,
@@ -960,9 +998,13 @@ class F5LogSheet(Sheet):
         super().__init__(*args, **kwargs)
         # the default F5 logs don't have the year so we have to guess from the file ctime
         # TODO: make this overridable
+        self._log_tz=pytz.UTC
         try:
-            self._year = datetime.utcfromtimestamp(self.source.stat().st_ctime).year
-        except AttributeError:
+            self._year = int(vd.options.get(
+                "f5log_log_year",
+                datetime.utcfromtimestamp(self.source.stat().st_ctime).year,
+            ))
+        except (AttributeError, ValueError, TypeError):
             self._year = datetime.now().year
 
     def iterload(self):
@@ -976,6 +1018,12 @@ class F5LogSheet(Sheet):
                 object_regex = None
         else:
             object_regex = None
+
+        try:
+            self._log_tz = pytz.timezone(vd.options.get("f5log_log_timzeone", "UTC"))
+        except pytz.exceptions.UnknownTimeZoneError as exc:
+            # TODO: make this error go into the errors sheet
+            self._log_tz = pytz.UTC
 
         for line in self.source:
             m = F5LogSheet.re_f5log.match(line)
@@ -1002,6 +1050,7 @@ class F5LogSheet(Sheet):
                         hour=int(_t[7:9]),
                         minute=int(_t[10:12]),
                         second=int(_t[13:15]),
+                        tzinfo=self._log_tz,
                     )
                 except ValueError as exc:
                     yield F5LogSheet.F5LogRow(
