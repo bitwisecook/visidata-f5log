@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -735,6 +735,16 @@ class F5LogSheet(Sheet):
         }
 
     @staticmethod
+    def split_ltm_dns_ignoring_tfer(msg):
+        # Ignoring transfer for zone qaautomation-dns.com from 10.17.205.164; transfer not enabled.
+        m = msg.split(" ")
+        yield {
+            "msg": " ".join([*m[:2], *m[-3:]]),
+            "srchost": m[6].strip(';'),
+            "zone": m[4],
+        }
+
+    @staticmethod
     def split_ltm_http_process_state(msg):
         m = F5LogSheet.re_ltm_http_process_state.match(msg)
         if not m:
@@ -981,6 +991,7 @@ class F5LogSheet(Sheet):
         0x01531018: split_ltm_dns_failed_xfr.__func__,
         0x0153101C: split_ltm_dns_handling_notify.__func__,
         0x0153101F: split_ltm_dns_axfr_succeeded_1f.__func__,
+        0x01531022: split_ltm_dns_ignoring_tfer.__func__,
         0x0153102C: split_ltm_dns_axfr_succeeded_2c.__func__,
     }
 
