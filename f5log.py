@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.5"
+__version__ = "1.0.6"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -139,7 +139,7 @@ class F5LogSheet(Sheet):
         r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<srchost>\S+)\s->\s(?P<dsthost>\S+)|.*)"
     )
     re_ltm_pool_mon_status_msg = re.compile(
-        r"^(Pool|Node)\s(?P<poolobj>\S+)\s(member|address)\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>.+)\.\s\[\s(?:(?:(?:(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>.*))?)?(?:,\s)?)+)?\s]\s*(?:\[\swas\s(?P<prevstatus>.+)\sfor\s(?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)sec\s\])?$"
+        r"^(Pool|Node)\s(?P<poolobj>\S+)\s(member|address)\s(?P<poolmemberobj>\S+)\smonitor\sstatus\s(?P<newstatus>.+)\.\s\[\s(?:(?:(?:(?P<monitorobj>\S+):\s(?P<monitorstatus>\w+)(?:;\slast\serror:\s\S*\s?(?P<lasterr>[^\]]*))?)?(?:,\s)?)+)?\s]\s*(?:\[\swas\s(?P<prevstatus>.+)\sfor\s(?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)sec\s\])?$"
     )
     re_ltm_ip_msg = re.compile(
         r"(?:.*?)(?P<ip1>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port1>\d+))?(?:(?:\s->\s|:)(?P<ip2>\d+\.\d+\.\d+\.\d+)(?:[:.](?P<port2>\d+))?)?(?:\smonitor\sstatus\s(?P<mon_status>\w+)\.\s\[[^]]+\]\s+\[\swas\s(?P<prev_status>\w+)\sfor\s((?P<durationhr>-?\d+)hrs?:(?P<durationmin>-?\d+)mins?:(?P<durationsec>-?\d+)secs?)\s\]|\.?(?:.*))"
@@ -163,7 +163,7 @@ class F5LogSheet(Sheet):
         r"^(?P<msg>No\sshared\sciphers\sbetween\sSSL\speers)\s(?P<srchost>\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)\.(?P<srcport>\d+)\:(?P<dsthost>\d+\.\d+\.\d+\.\d+|[0-9a-f:]+)\.(?P<dstport>\d+)\.$"
     )
     re_ltm_http_process_state = re.compile(
-        r"^http_process_state_(?P<httpstate>\S+)\s-\sInvalid\saction:0x(?P<actionid>[a-f0-9]+)\s(?P<msg>.*?)\s*(?P<sidea>\S+)\s\((?P<src>\S+)\s->\s(?P<vsdst>\S+)\)\s+(?:(?P<sideb>.+)\s\((?P<poolsrc>\S+)\s->\s(?P<dst>\S+)\)|\(\(null\sconnflow\)\))\s\((?P<sideaa>\S+)\sside:\svip=(?P<vs>\S+)\sprofile=(?P<profile>\S+)\spool=(?P<pool>\S+)\s(?P<sideaaa>\S+)_ip=(?P<sideasrc>\S+)\)$"
+        r"^http_process_state_(?P<httpstate>\S+)\s-\sInvalid\saction:0x(?P<actionid>[a-f0-9]+)\s(?P<msg>.*?)\s*(?P<sidea>(?:server|client)side)\s\((?P<src>\S+)\s->\s(?P<vsdst>\S+)\)\s+(?:(?P<sideb>(?:server|client)side)\s)?(?:\((?P<poolsrc>\S+)\s->\s(?P<dst>\S+)\)|\(\(null\sconnflow\)\))\s\((?P<sideaa>\S+)\sside:\svip=(?P<vs>\S+)\sprofile=(?P<profile>\S+)\s(?:pool=(?P<pool>\S+)\s)?(?P<sideaaa>\S+)_ip=(?P<sideasrc>\S+)\)$"
     )
     re_ltm_http_header_exceeded = re.compile(
         r"^(?P<msg>HTTP\sheader\s(?:count|\((?P<size>\d+)\))\sexceeded\smaximum\sallowed\s(?P<type>count|size)\sof\s(?P<limit>\d+))\s\((?P<side>\S+)\sside:\svip=(?P<object>\S+)\sprofile=(?P<profile>\S+)\spool=(?P<pool>\S+)\s(?P<sideip>client|server)_ip=(?P<sidehost>.*)\)$"
@@ -210,34 +210,35 @@ class F5LogSheet(Sheet):
         return sheet.f5log_mon_colors.get((col.name, value.value), None)
 
     f5log_warn_logid = {
-        "01140029": "color_f5log_logid_alarm",
-        "01140045": "color_f5log_logid_alarm",
-        "01140030": "color_f5log_logid_warn",
-        "010c0052": "color_f5log_logid_warn",
-        "010c0018": "color_f5log_logid_warn",
-        "010c003e": "color_f5log_logid_alarm",
-        "010c0054": "color_f5log_logid_alarm",
-        "010c0057": "color_f5log_logid_info",
-        "01190004": "color_f5log_logid_alarm",
-        "010e0001": "color_f5log_logid_alarm",
-        "010e0004": "color_f5log_logid_alarm",
-        "011e0002": "color_f5log_logid_alarm",
-        "011e0003": "color_f5log_logid_alarm",
-        "010c0044": "color_f5log_logid_warn",
-        "014f0004": "color_f5log_logid_warn",
-        "010c0055": "color_f5log_logid_alarm",
-        "010c003f": "color_f5log_logid_alarm",
-        "011f0005": "color_f5log_logid_warn",
-        "01010029": "color_f5log_logid_warn",
-        "010c0019": "color_f5log_logid_info",
-        "010c0053": "color_f5log_logid_info",
-        "01340011": "color_f5log_logid_warn",
-        "01390002": "color_f5log_logid_notice",
         "01010013": "color_f5log_logid_notice",
-        "01070333": "color_f5log_logid_warn",
+        "01010029": "color_f5log_logid_warn",
+        "01010038": "color_f5log_logid_warn",
         "01010201": "color_f5log_logid_warn",
         "01010281": "color_f5log_logid_warn",
-        "01010038": "color_f5log_logid_warn",
+        "01070333": "color_f5log_logid_warn",
+        "01070596": "color_f5log_logid_alarm",
+        "010c0018": "color_f5log_logid_warn",
+        "010c0019": "color_f5log_logid_info",
+        "010c003e": "color_f5log_logid_alarm",
+        "010c003f": "color_f5log_logid_alarm",
+        "010c0044": "color_f5log_logid_warn",
+        "010c0052": "color_f5log_logid_warn",
+        "010c0053": "color_f5log_logid_info",
+        "010c0054": "color_f5log_logid_alarm",
+        "010c0055": "color_f5log_logid_alarm",
+        "010c0057": "color_f5log_logid_info",
+        "010e0001": "color_f5log_logid_alarm",
+        "010e0004": "color_f5log_logid_alarm",
+        "01340011": "color_f5log_logid_warn",
+        "01390002": "color_f5log_logid_notice",
+        "01140029": "color_f5log_logid_alarm",
+        "01140030": "color_f5log_logid_warn",
+        "01140045": "color_f5log_logid_alarm",
+        "01190004": "color_f5log_logid_alarm",
+        "011e0002": "color_f5log_logid_alarm",
+        "011e0003": "color_f5log_logid_alarm",
+        "014f0004": "color_f5log_logid_warn",
+        "011f0005": "color_f5log_logid_warn",
     }
 
     def colorizeRows(sheet, col: Column, row: F5LogRow, value):
