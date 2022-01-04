@@ -1,6 +1,6 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
@@ -151,7 +151,7 @@ class F5LogSheet(Sheet):
         r"Certificate\s'(?P<cert_cn>.*)'\sin\sfile\s(?P<file>\S+)\s(?P<message>will\sexpire|expired)\son\s(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s\d+\s\S+)"
     )
     re_gtm_monitor = re.compile(
-        r"^(?:SNMP_TRAP:\s)?(?P<objtype>VS|Pool|Monitor|Wide\sIP|Server|Data\scenter|Prober\sPool|Box)\s(?P<object>\S+)\s(?:member\s(?P<pool_member>\S+)\s)?(?:\(ip(?::port)?=(?P<ipport>[^\)]+)\)\s)?(?:\(Server\s(?P<server>[^\)]+)\)\s)?(?:state\schange\s)?(?P<prev_status>\w+)\s-->\s(?P<new_status>\w+)(?:(?:\s\(\s?)(?P<msg>(?:(?P<type>\w+)\s(?P<monitor_object>\S+)\s:\s)?state:\s(?P<state>\S+)|.*)\))?$"
+        r"^(?:SNMP_TRAP:\s)?(?P<objtype>VS|Pool|Monitor|Wide\sIP|Server|Data\scenter|Prober\sPool|Box)\s\(?(?P<object>\S+?)\)?\s(?:member\s\(?(?P<pool_member>\S+?)\)?\s)?(?:\(ip(?::port)?=(?P<ipport>[^\)]+)\)\s)?(?:\(Server\s(?P<server>[^\)]+)\)\s)?(?:state\schange\s)?(?:(?P<prev_status>\w+)\s-->\s)?(?P<new_status>\w+)(?:(?:\s\(\s?)(?P<msg>(?:(?P<type>\w+)\s(?P<monitor_object>\S+)\s:\s)?state:\s(?P<state>\S+)|.*)\))?$"
     )
     re_gtm_monitor_instance = re.compile(
         r"^Monitor\sinstance\s(?P<object>\S+)\s(?P<monip>\S+)\s(?P<prevstatus>\S+)\s-->\s(?P<newstatus>\S+)\sfrom\s(?P<srcgtm>\S+)\s\((?:state:?\s)?(?P<state>.*)\)$"
@@ -189,6 +189,7 @@ class F5LogSheet(Sheet):
         ("new_status", "unchecked"): "color_f5log_mon_unknown",
         ("new_status", "node down"): "color_f5log_mon_disabled",
         ("new_status", "forced down"): "color_f5log_mon_disabled",
+        ("new_status", "disabled"): "color_f5log_mon_disabled",
         ("prev_status", "available"): "color_f5log_mon_up",
         ("prev_status", "unavailable"): "color_f5log_mon_down",
         ("prev_status", "up"): "color_f5log_mon_up",
@@ -202,6 +203,7 @@ class F5LogSheet(Sheet):
         ("prev_status", "unchecked"): "color_f5log_mon_unknown",
         ("prev_status", "node down"): "color_f5log_mon_disabled",
         ("prev_status", "forced down"): "color_f5log_mon_disabled",
+        ("prev_status", "disabled"): "color_f5log_mon_disabled",
     }
 
     def colorizeMonitors(sheet, col: Column, row: F5LogRow, value):
@@ -235,10 +237,11 @@ class F5LogSheet(Sheet):
         "01140030": "color_f5log_logid_warn",
         "01140045": "color_f5log_logid_alarm",
         "01190004": "color_f5log_logid_alarm",
+        "011ae0f3": "color_f5log_logid_alarm",
         "011e0002": "color_f5log_logid_alarm",
         "011e0003": "color_f5log_logid_alarm",
-        "014f0004": "color_f5log_logid_warn",
         "011f0005": "color_f5log_logid_warn",
+        "014f0004": "color_f5log_logid_warn",
     }
 
     def colorizeRows(sheet, col: Column, row: F5LogRow, value):
@@ -740,7 +743,7 @@ class F5LogSheet(Sheet):
         m = msg.split(" ")
         yield {
             "msg": " ".join([*m[:2], *m[-3:]]),
-            "srchost": m[6].strip(';'),
+            "srchost": m[6].strip(";"),
             "zone": m[4],
         }
 
@@ -895,6 +898,16 @@ class F5LogSheet(Sheet):
         }
 
     @staticmethod
+    def split_gtm_syncgroup_change(msg):
+        m = msg.split(" ")
+        yield {
+            "object": m[3],
+            "srchost": ip_address(m[4].strip("()")),
+            "syncgroup": m[-1],
+            "msg": f"BIG-IP GTM {m[5]} sync group",
+        }
+
+    @staticmethod
     def split_gtm_changed_state(msg):
         m = msg.split(" ")
         yield {
@@ -947,10 +960,13 @@ class F5LogSheet(Sheet):
         0x011A3004: split_gtm_monitor.__func__,
         0x011A4002: split_gtm_monitor.__func__,
         0x011A4003: split_gtm_monitor.__func__,
+        0x011A4004: split_gtm_monitor.__func__,
         0x011A4101: split_gtm_monitor.__func__,
         0x011A4102: split_gtm_monitor.__func__,
         0x011A5003: split_gtm_monitor.__func__,
         0x011A5004: split_gtm_monitor.__func__,
+        0x011A5008: split_gtm_syncgroup_change.__func__,
+        0x011A5009: split_gtm_syncgroup_change.__func__,
         0x011A500B: split_gtm_monitor.__func__,
         0x011A500C: split_gtm_monitor.__func__,
         0x011A6005: split_gtm_monitor.__func__,
