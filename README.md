@@ -18,11 +18,10 @@ It extracts common log entries, particularly around monitoring, iRules and confi
 
 Inside visidata, `<space>` to start a command, `open-plugins` to open the plugin sheet, scroll to `f5log` and press `a` to install the latest version.
 
-_this wil be available once [PR#1253](https://github.com/saulpw/visidata/pull/1253) is merged_
-
 ### Manual Installation on MacOS / Linux / *BSD
 
 ```sh
+pip3 install pytz
 mkdir -p .visidata/plugins
 curl -o ~/.visidata/plugins/f5log.py https://raw.githubusercontent.com/bitwisecook/visidata-f5log/0.3.1/f5log.py
 echo 'import plugins.f5log' >> ~/.visidata/plugins/init.py
