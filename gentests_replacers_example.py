@@ -375,6 +375,7 @@ def replace_network(msg, logrow):
     if all([_ in msg for _ in ("---===[ ", " ]===---")]) or logrow.logid1 in (
         "01010001",
         "01070711",
+        "0107165d",
         "0107d000",
         "012b0000",
         "012b0021",
