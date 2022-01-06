@@ -1,10 +1,13 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.8"
+__version__ = "1.0.9"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
-import pytz
+try:
+    import zoneinfo
+except ImportError:
+    from backports import zoneinfo
 import re
 import traceback
 from typing import Any, Dict, Optional
@@ -1043,7 +1046,7 @@ class F5LogSheet(Sheet):
         super().__init__(*args, **kwargs)
         # the default F5 logs don't have the year so we have to guess from the file ctime
         # TODO: make this overridable
-        self._log_tz = pytz.UTC
+        self._log_tz = zoneinfo.ZoneInfo("UTC")
         try:
             self._year = int(
                 vd.options.get(
@@ -1067,10 +1070,10 @@ class F5LogSheet(Sheet):
             object_regex = None
 
         try:
-            self._log_tz = pytz.timezone(vd.options.get("f5log_log_timzeone", "UTC"))
-        except pytz.exceptions.UnknownTimeZoneError as exc:
+            self._log_tz = zoneinfo.ZoneInfo(vd.options.get("f5log_log_timzeone", "UTC"))
+        except zoneinfo.ZoneInfoNotFoundError as exc:
             # TODO: make this error go into the errors sheet
-            self._log_tz = pytz.UTC
+            self._log_tz = zoneinfo.ZoneInfo("UTC")
 
         for line in self.source:
             m = F5LogSheet.re_f5log.match(line)
