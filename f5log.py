@@ -1,9 +1,10 @@
 __name__ = "f5log"
 __author__ = "James Deucker <me@bitwisecook.org>"
-__version__ = "1.0.9"
+__version__ = "1.0.10"
 
 from datetime import datetime, timedelta
 from ipaddress import ip_address
+
 try:
     import zoneinfo
 except ImportError:
@@ -136,7 +137,7 @@ class F5LogSheet(Sheet):
     ]
 
     re_f5log = re.compile(
-        r"^(?:\<\d+\>\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+))\s+(?P<host>\S+)\s+(?:(?P<level>[a-z]+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
+        r"^(?:(?:audit|gtm|ltm|security|tmm|user|\<\d+\>)\s+)?(?:(?P<date1>[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})|(?P<date2>\d+-\d+-\d+T\d+:\d+:\d+[+-]\d+:\d+)|(?P<date3>\d+-\d+\s\d{2}:\d{2}:\d{2}))\s+(?P<host>\S+)\s+(?:(?P<level>\S+)\s+(?:(?P<process>[a-z0-9_()-]+\s?)\[(?P<pid>\d+)\]:\s+)?(?:(?P<logid1>[0-9a-f]{8}):(?P<logid2>[0-9a-f]):\s+)?)?(?P<message>.*)$"
     )
     re_ltm_irule = re.compile(
         r"(?:(?P<irule_msg>TCL\serror|Rule|Pending\srule):?\s(?P<irule>\S+)\s\<(?P<event>[A-Z_0-9]+)\>(?:\s-\s|:\s|\s)?)(?P<message>aborted\sfor\s(?P<srchost>\S+)\s->\s(?P<dsthost>\S+)|.*)"
@@ -1070,7 +1071,9 @@ class F5LogSheet(Sheet):
             object_regex = None
 
         try:
-            self._log_tz = zoneinfo.ZoneInfo(vd.options.get("f5log_log_timzeone", "UTC"))
+            self._log_tz = zoneinfo.ZoneInfo(
+                vd.options.get("f5log_log_timzeone", "UTC")
+            )
         except zoneinfo.ZoneInfoNotFoundError as exc:
             # TODO: make this error go into the errors sheet
             self._log_tz = zoneinfo.ZoneInfo("UTC")
@@ -1113,6 +1116,22 @@ class F5LogSheet(Sheet):
                     )
             elif m.get("date2"):
                 timestamp = datetime.strptime(m.get("date2"), "%Y-%m-%dT%H:%M:%S%z")
+            elif m.get("date3"):
+                # whoever designed tmsh show sys log needs to have a good hard think about themselves
+                timestamp = datetime.strptime(
+                    f'{self._year}-{m.get("date3")}', "%Y-%m-%d %H:%M:%S"
+                )
+                timestamp = datetime(
+                    year=timestamp.year,
+                    month=timestamp.month,
+                    day=timestamp.day,
+                    hour=timestamp.hour,
+                    minute=timestamp.minute,
+                    second=timestamp.second,
+                    tzinfo=self._log_tz,
+                )
+                # because this is madness
+                m["level"], m["host"] = m.get("host"), m.get("level")
             else:
                 timestamp = None
 
